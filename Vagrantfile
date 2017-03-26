@@ -64,8 +64,31 @@ Vagrant.configure(2) do |config|
   # Enable provisioning with a shell script. Additional provisioners such as
   # Puppet, Chef, Ansible, Salt, and Docker are also available. Please see the
   # documentation for more information about their specific syntax and use.
-  # config.vm.provision "shell", inline: <<-SHELL
-  #   sudo apt-get update
-  #   sudo apt-get install -y apache2
-  # SHELL
+  config.vm.provision "shell", inline: <<-SHELL
+    sed -i s/localhost\.localdomain/proxy.172.16.12.10.xip.io/ /etc/sysconfig/network
+    sysctl kernel.hostname=proxy.172.16.12.10.xip.io
+    iptables -I INPUT 1 -p tcp --dport 443 -j ACCEPT
+    iptables -I INPUT 1 -p tcp --dport 80 -j ACCEPT
+    iptables -I INPUT 1 -p tcp --dport 22 -j ACCEPT
+    iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+    iptables -A INPUT -p all -j REJECT --reject-with icmp-host-prohibited
+    iptables -A FORWARD -p all -j REJECT --reject-with icmp-host-prohibited
+    service iptables save
+    service iptables restart
+    yum update -y
+    yum install httpd -y
+    chkconfig httpd on
+    rpm -Uvh /vagrant/jdk-8u121-linux-x64.rpm
+    tar xvzf /vagrant/apache-tomcat-8.0.42.tar.gz -C /usr/local
+    ln -s /usr/local/apache-tomcat-8.0.42 /usr/local/tomcat
+    useradd tomcat
+    chown -R tomcat:tomcat /user/local/tomcat/
+    ln -s /usr/local/tomcat/conf /etc/tomcat
+    cp /vagrant/tomcat.conf /etc/init.d/tomcat
+    cp /vagrant/tomcat-service /etc/init.d/tomcat
+    chmod 755 /etc/init.d/tomcat
+    ln -s /usr/local/tomcat/bin/startup.sh
+    chkconfig tomcat on
+    service tomcat start
+  SHELL
 end
