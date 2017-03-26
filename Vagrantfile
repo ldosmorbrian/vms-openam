@@ -65,8 +65,11 @@ Vagrant.configure(2) do |config|
   # Puppet, Chef, Ansible, Salt, and Docker are also available. Please see the
   # documentation for more information about their specific syntax and use.
   config.vm.provision "shell", inline: <<-SHELL
+    # hostname
     sed -i s/localhost\.localdomain/proxy.172.16.12.10.xip.io/ /etc/sysconfig/network
     sysctl kernel.hostname=proxy.172.16.12.10.xip.io
+    # firewall
+    iptables -I INPUT -i lo -j ACCEPT
     iptables -I INPUT 1 -p tcp --dport 443 -j ACCEPT
     iptables -I INPUT 1 -p tcp --dport 80 -j ACCEPT
     iptables -I INPUT 1 -p tcp --dport 22 -j ACCEPT
@@ -75,19 +78,28 @@ Vagrant.configure(2) do |config|
     iptables -A FORWARD -p all -j REJECT --reject-with icmp-host-prohibited
     service iptables save
     service iptables restart
+    # os updates
     yum update -y
+    # httpd
     yum install httpd -y
     chkconfig httpd on
+    echo 'ProxyPass /openam               ajp://localhost:8009/openam' >> /etc/httpd/conf/httpd.conf
+    echo 'ProxyPassReverse /openam        ajp://localhost:8009/openam' >> /etc/httpd/conf/httpd.conf
+    echo '#' >> /etc/httpd/conf/httpd.conf
+    echo 'ProxyPass /examples             ajp://localhost:8009/examples' >> /etc/httpd/conf/httpd.conf
+    echo 'ProxyPassReverse /examples      ajp://localhost:8009/examples' >> /etc/httpd/conf/httpd.conf
+    service httpd restart
+    # java
     rpm -Uvh /vagrant/jdk-8u121-linux-x64.rpm
+    # tomcat
     tar xvzf /vagrant/apache-tomcat-8.0.42.tar.gz -C /usr/local
     ln -s /usr/local/apache-tomcat-8.0.42 /usr/local/tomcat
     useradd tomcat
-    chown -R tomcat:tomcat /user/local/tomcat/
     ln -s /usr/local/tomcat/conf /etc/tomcat
-    cp /vagrant/tomcat.conf /etc/init.d/tomcat
+    cp /vagrant/tomcat.conf /etc/tomcat
     cp /vagrant/tomcat-service /etc/init.d/tomcat
+    chown -R tomcat:tomcat /usr/local/apache-tomcat-8.0.42
     chmod 755 /etc/init.d/tomcat
-    ln -s /usr/local/tomcat/bin/startup.sh
     chkconfig tomcat on
     service tomcat start
   SHELL

@@ -17,7 +17,9 @@ Start vm
 
         vagrant up --provider virtualbox
 
-Other commands we ran after starting the VM:
+These application bundles are expected in this base dir:
 
-​
-get oracle jdk rpm
+        OpenAM-13.0.0.zip
+        apache-tomcat-8.0.42.tar.gz
+        jdk-8u121-linux-x64.rpm
+
