@@ -98,9 +98,19 @@ Vagrant.configure(2) do |config|
     ln -s /usr/local/tomcat/conf /etc/tomcat
     cp /vagrant/tomcat.conf /etc/tomcat
     cp /vagrant/tomcat-service /etc/init.d/tomcat
+    sed -i s/Connector\ port/Connector\ URIEncoding=\"UTF-8\"\ port/ /etc/tomcat/server.xml
     chown -R tomcat:tomcat /usr/local/apache-tomcat-8.0.42
     chmod 755 /etc/init.d/tomcat
     chkconfig tomcat on
+    # openam
+    service tomcat stop
+    unzip /vagrant/OpenAM-13.0.0.zip -d /vagrant/
+    cp /vagrant/openam/OpenAM-13.0.0.war /usr/local/tomcat/webapps/openam.war
+    chown tomcat:tomcat /usr/local/tomcat/webapps/openam.war
+    # start tomcat
     service tomcat start
+    # Extract web policy agent
+    unzip /vagrant/Apache_v22_Linux_64bit_4.0.0.zip -d /opt
+    chown -R apache:apache /opt/web_agents
   SHELL
 end
