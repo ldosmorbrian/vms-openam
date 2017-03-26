@@ -89,3 +89,5 @@ pkcs11.config
 scripts/**/*.csv
 scripts/**/*.json
 scripts/ruby/.ruby-version
+
+.vagrant/
