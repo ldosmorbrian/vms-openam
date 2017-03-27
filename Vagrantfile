@@ -98,7 +98,7 @@ Vagrant.configure(2) do |config|
     ln -s /usr/local/tomcat/conf /etc/tomcat
     cp /vagrant/tomcat.conf /etc/tomcat
     cp /vagrant/tomcat-service /etc/init.d/tomcat
-    sed -i s/Connector\ port/Connector\ URIEncoding=\"UTF-8\"\ port/ /etc/tomcat/server.xml
+    sed -i 's/Connector port/Connector URIEncoding="UTF-8" port/' /etc/tomcat/server.xml
     chown -R tomcat:tomcat /usr/local/apache-tomcat-8.0.42
     chmod 755 /etc/init.d/tomcat
     chkconfig tomcat on
