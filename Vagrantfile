@@ -104,6 +104,8 @@ Vagrant.configure(2) do |config|
     chkconfig tomcat on
     # openam
     service tomcat stop
+    sed -i '$ i openam soft nofile 65536' /etc/security/limits.conf
+    sed -i '$ i openam hard nofile 131072' /etc/security/limits.conf
     unzip /vagrant/OpenAM-13.0.0.zip -d /vagrant/
     cp /vagrant/openam/OpenAM-13.0.0.war /usr/local/tomcat/webapps/openam.war
     chown tomcat:tomcat /usr/local/tomcat/webapps/openam.war

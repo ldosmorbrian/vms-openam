@@ -26,7 +26,9 @@ These application bundles are expected in this base dir:
 
 Installing OpenAM with GUI
 
-Upon startup, the OpenAM war should be deployed, connect to [http://proxy.172.16.12.10.xip.io/openam]()
+Upon startup, the OpenAM war should be deployed.
+
+For this test scenario, stop the firewall first and then connect to [http://openam.172.16.12.10.xip.io:8080/openam]()
 
 ###Step 1: General
 
@@ -34,7 +36,7 @@ Enter password for admin user, example: admin1235813
 
 ###Step 2: Server Settings
 
-* Server URL: http://proxy.172.16.12.10.xip.io:80
+* Server URL: http://openam.172.16.12.10.xip.io:8080
 
 * Cookie Domain: .xip.io
 
@@ -66,7 +68,9 @@ Enter password for admin user, example: admin1235813
 
 ###Step 5: Site Configuration
 
-* Yes
+* No
+
+* But we decide yes, below might be ok:
 
 * Site Name: sandbox
 
@@ -74,7 +78,7 @@ Enter password for admin user, example: admin1235813
 
 * Enable Session HA Persistence: Check/Yes
 
-Step 6: Default Policy Agent User
+###Step 6: Default Policy Agent User
 
 Enter password, example: adminpa1235813
 
@@ -106,13 +110,13 @@ Click Agents on OpenAM top level realm
 
 New Agent
 
-* Name: webproxy
+* Name: proxypa
 
 * Password: well, you know...
 
 * Configuration: Centralized
 
-* Server URL: http://proxy.172.16.12.10.xip.io:80/openam
+* Server URL: http://openam.172.16.12.10.xip.io:8080/openam
 
 * Agent URL: http://proxy.172.16.12.10.xip.io:80
 
@@ -130,11 +134,11 @@ It should already be extracted to /opt/web_agents
 
 * OpenSSOAgentBootstrap.properties: hit enter
 
-* OpenAM server URL: http://proxy.172.16.12.10.xip.io:80/openam
+* OpenAM server URL: http://openam.172.16.12.10.xip.io:8080/openam
 
 * Agent URL: http://proxy.172.16.12.10.xip.io:80
 
-* Agent Profile name: webproxy
+* Agent Profile name: proxypa
 
 * Agent Real: default [/], hit enter
 
@@ -156,11 +160,11 @@ Shutdown firewall, connected to OpenAM directly at http://proxy.172.16.12.10.xip
 
 Edited the Web Policy Agent configuration in the OpenAM web page.
 
-* Top Level Realm --> Agents tab --> webproxy
+* Top Level Realm --> Agents tab --> proxypa
 
         Added http://proxy.172.16.12.10.xip.io:8080/ as another Agent Root URL for CDSSO
         
-* Agents tab --> webproxy --> Application tab
+* Agents tab --> proxypa --> Application tab
 
         Added several new Not Enforced URLs
         http://proxy.172.16.12.10.xip.io:8080/openam*
