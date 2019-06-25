@@ -12,7 +12,7 @@ Vagrant.configure(2) do |config|
 
   # Every Vagrant development environment requires a box. You can search for
   # boxes at https://atlas.hashicorp.com/search.
-  config.vm.box = "centos/6"
+  config.vm.box = "centos/7"
 
   # Disable automatic box update checking. If you disable this, then
   # boxes will only be checked for updates when the user runs
@@ -70,49 +70,54 @@ Vagrant.configure(2) do |config|
     sysctl kernel.hostname=proxy.172.16.12.10.xip.io
     # firewall
     iptables -I INPUT -i lo -j ACCEPT
-    iptables -I INPUT 1 -p tcp --dport 443 -j ACCEPT
-    iptables -I INPUT 1 -p tcp --dport 80 -j ACCEPT
-    iptables -I INPUT 1 -p tcp --dport 22 -j ACCEPT
-    iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
-    iptables -A INPUT -p all -j REJECT --reject-with icmp-host-prohibited
-    iptables -A FORWARD -p all -j REJECT --reject-with icmp-host-prohibited
-    service iptables save
-    service iptables restart
+    firewall-cmd --zone=public --permanent --add-port=443/tcp
+    firewall-cmd --zone=public --permanent --add-port=80/tcp
+    firewall-cmd --zone=public --permanent --add-port=22/tcp
+    firewall-cmd --reload
     # os updates
     yum update -y
+    # os config
+    sed -i '$ i openam soft nofile 65536' /etc/security/limits.conf
+    sed -i '$ i openam hard nofile 131072' /etc/security/limits.conf
     # httpd
     yum install httpd -y
-    chkconfig httpd on
+    systemctl enable httpd.service
     echo 'ProxyPass /openam               ajp://localhost:8009/openam' >> /etc/httpd/conf/httpd.conf
     echo 'ProxyPassReverse /openam        ajp://localhost:8009/openam' >> /etc/httpd/conf/httpd.conf
     echo '#' >> /etc/httpd/conf/httpd.conf
     echo 'ProxyPass /examples             ajp://localhost:8009/examples' >> /etc/httpd/conf/httpd.conf
     echo 'ProxyPassReverse /examples      ajp://localhost:8009/examples' >> /etc/httpd/conf/httpd.conf
-    service httpd restart
+    systemctl restart httpd.service
     # java
-    rpm -Uvh /vagrant/jdk-8u121-linux-x64.rpm
+    yum install java-1.8.0-openjdk-devel
     # tomcat
-    tar xvzf /vagrant/apache-tomcat-8.0.42.tar.gz -C /usr/local
-    ln -s /usr/local/apache-tomcat-8.0.42 /usr/local/tomcat
+    mkdir -p /opt/tomcat
+    tar xvzf /vagrant/apache-tomcat-8.5.42.tar.gz -C /opt/tomcat
+    ln -s /opt/tomcat/apache-tomcat-8.5.42 /opt/tomcat/latest
     useradd tomcat
-    ln -s /usr/local/tomcat/conf /etc/tomcat
-    cp /vagrant/tomcat.conf /etc/tomcat
-    cp /vagrant/tomcat-service /etc/init.d/tomcat
-    sed -i 's/Connector port/Connector URIEncoding="UTF-8" port/' /etc/tomcat/server.xml
-    chown -R tomcat:tomcat /usr/local/apache-tomcat-8.0.42
-    chmod 755 /etc/init.d/tomcat
-    chkconfig tomcat on
-    # openam
-    service tomcat stop
-    sed -i '$ i openam soft nofile 65536' /etc/security/limits.conf
-    sed -i '$ i openam hard nofile 131072' /etc/security/limits.conf
-    unzip /vagrant/OpenAM-13.0.0.zip -d /vagrant/
-    cp /vagrant/openam/OpenAM-13.0.0.war /usr/local/tomcat/webapps/openam.war
-    chown tomcat:tomcat /usr/local/tomcat/webapps/openam.war
-    # start tomcat
-    service tomcat start
-    # Extract web policy agent
-    unzip /vagrant/Apache_v22_Linux_64bit_4.0.0.zip -d /opt
-    chown -R apache:apache /opt/web_agents
+    chown -R tomcat:tomcat /opt/tomcat
+    chmod +x /opt/tomcat/latest/bin/*.sh
+    cp /vagrant/tomcat-service.sysctl /etc/systemd/system/tomcat.service
+    systemctl daemon-reload
+    systemctl enable tomcat
+    systemctl start tomcat
+#    ln -s /usr/local/tomcat/conf /etc/tomcat
+#    cp /vagrant/tomcat.conf /etc/tomcat
+#    cp /vagrant/tomcat-service /etc/init.d/tomcat
+#    sed -i 's/Connector port/Connector URIEncoding="UTF-8" port/' /etc/tomcat/server.xml
+#    chown -R tomcat:tomcat /usr/local/apache-tomcat-8.0.42
+#    chmod 755 /etc/init.d/tomcat
+#    chkconfig tomcat on
+#    # openam
+#    service tomcat stop
+
+#    unzip /vagrant/AM-eval-6.5.1.zip -d /vagrant/
+#    cp /vagrant/openam/AM-eval-6.5.1.war /usr/local/tomcat/webapps/openam.war
+#    chown tomcat:tomcat /usr/local/tomcat/webapps/openam.war
+#    # start tomcat
+#    service tomcat start
+#    # Extract web policy agent
+#    unzip /vagrant/Apache_v22_Linux_64bit_4.0.0.zip -d /opt
+#    chown -R apache:apache /opt/web_agents
   SHELL
 end

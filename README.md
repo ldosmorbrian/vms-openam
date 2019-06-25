@@ -1,5 +1,5 @@
 
-Initially got started with:
+Getting started with local development:
 
 Install Vagrant
 
@@ -11,7 +11,7 @@ Install VirtualBox
 
 Initial vagrant init:
 
-        vagrant init centos/6
+        vagrant init centos/7
 
 Start vm
 
@@ -19,14 +19,13 @@ Start vm
 
 These application bundles are expected in this base dir:
 
-        OpenAM-13.0.0.zip
-        Apache_v22_Linux_64bit_4.0.0.zip 
-        apache-tomcat-8.0.42.tar.gz
-        jdk-8u121-linux-x64.rpm
+        AM-eval-6.5.1.zip # download from ForgeRock backstage
+        web-agent-5.6.0-Apache_v24_Linux_64bit.zip  # download from ForgeRock backstage
+        apache-tomcat-8.5.42.tar.gz # download from apache-tomcat
 
 Installing OpenAM with GUI
 
-Upon startup, the OpenAM war should be deployed.
+The vagrant init scripts will configure tomcat and deploy the OpenAM war.
 
 For this test scenario, stop the firewall first and then connect to [http://openam.172.16.12.10.xip.io:8080/openam]()
 
@@ -187,4 +186,14 @@ Edited the Web Policy Agent configuration in the OpenAM web page.
         
 
 
-         
+## References
+
+### Tomcat
+
+https://linuxize.com/post/how-to-install-tomcat-8-5-on-centos-7/
+
+### Java
+
+https://backstage.forgerock.com/docs/am/6.5/install-guide/#prepare-java-openjdk
+
+### 
