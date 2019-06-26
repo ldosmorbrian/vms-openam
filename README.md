@@ -1,4 +1,6 @@
 
+# OpenAM on Wildfly behind Apache httpd proxy
+
 Getting started with local development:
 
 Install Vagrant
@@ -21,61 +23,104 @@ These application bundles are expected in this base dir:
 
         AM-eval-6.5.1.zip # download from ForgeRock backstage
         web-agent-5.6.0-Apache_v24_Linux_64bit.zip  # download from ForgeRock backstage
-        apache-tomcat-8.5.42.tar.gz # download from apache-tomcat
+        wildfly-11.0.0.Final.tar.gz # download from wildfly.org (supposedly this is closest match to EAP 7.1)
+
+
+## HTTPD Notes
+
+yum install mod_ssl
+copy certs to some directory, for example here's one potential file configuration (from /etc/httpd/conf/ssl.conf):
+SSLEngine on
+SSLCertificateFile /etc/pki/tls/certs/proxy.172.16.12.10.xip.io.crt
+SSLCertificateKeyFile /etc/pki/tls/private/proxy.172.16.12.10.xip.io.key
+SSLVerifyClient require
+SSLCACertificateFile /etc/pki/tls/certs/ca-bundle.trust.crt
+SSLVerifyDepth 0
+
+Needed to define ServerName globally
+TODO: update certgen tool to include pkcs12 version of certs, example:
+openssl pkcs12 -in MORIARTY.BRIAN.C.crt -inkey MORIARTY.BRIAN.C.key -export -out MORIARTY.BRIAN.C.pkcs12
+
+## Wildfly
+
+Enbable AJP:
+[root@localhost wildfly]# bin/jboss-cli.sh 
+You are disconnected at the moment. Type 'connect' to connect to the server or 'help' for the list of supported commands.
+[disconnected /] connect
+[standalone@localhost:9990 /] /subsystem=undertow/server=default-server/ajp-listener=myListener:add(socket-binding=ajp, scheme=http, enabled=true)
+{"outcome" => "success"}
+[standalone@localhost:9990 /] exit
+[
+
+## DS Notes
+
+sysctl --write fs.inotify.max_user_watches=524288
+
+
+
 
 Installing OpenAM with GUI
 
 The vagrant init scripts will configure tomcat and deploy the OpenAM war.
 
-For this test scenario, stop the firewall first and then connect to [http://openam.172.16.12.10.xip.io:8080/openam]()
+For this test scenario, stop the firewall first and then connect to [https://proxy.172.16.12.10.xip.io/openam]()
 
 ###Step 1: General
 
-Enter password for admin user, example: admin1235813
+Enter password for admin user, example: Password1234
 
 ###Step 2: Server Settings
 
-* Server URL: http://openam.172.16.12.10.xip.io:8080
+* Server URL: https://proxy.172.16.12.10.xip.io:443
 
 * Cookie Domain: .xip.io
 
 * Platform Locale: en_US
 
-* Configuration Directory: /home/tomcat/openam
+* Configuration Directory: /opt/openamcfg
 
 ###Step 3: Configuration Data Store Settings
 
 * First Instance
 
-* Configuration Data Store: OpenAM
+* Configuration Data Store: Embedded DS
 
-* Host Name: localhost (not editable)
+* Host Name: localhost (can't edit)
 
 * Port: 50389
  
-* Admin Port: 4444
+* Admin Port: 5444
 
 * JMX Port: 1689
 
-* Encryption Key: IGU70v0LWLnKErlNowTO6t/nATTfxXcG
+* Encryption Key: hiXJmelhruZ62WqG7ga2dhMZgb30g0Ri
 
 * Root Suffix: dc=openam,dc=forgerock,dc=org
 
 ###Step 4: User Data Store Settings
 
-* OpenAM User Data Store
+* Extenral User Data Store
+
+User Data Store Type: ForgeRock Directory Services (DS)
+
+SSL/TLS Enabled: no
+
+Directory Name: proxy.172.16.12.10.xip.io
+
+Root Suffix: dc=openam,dc=forgerock,dc=org
+
+Login ID: cn=Directory Manager
+
+Port: 1389
 
 ###Step 5: Site Configuration
 
-* No
-
-* But we decide yes, below might be ok:
+* Yes (just say yes, it's behind httpd)
 
 * Site Name: sandbox
 
-* Load Balancer URL: http://proxy.172.16.12.10.xip.io:80/openam
+* Load Balancer URL: https://proxy.172.16.12.10.xip.io/openam
 
-* Enable Session HA Persistence: Check/Yes
 
 ###Step 6: Default Policy Agent User
 
@@ -196,4 +241,10 @@ https://linuxize.com/post/how-to-install-tomcat-8-5-on-centos-7/
 
 https://backstage.forgerock.com/docs/am/6.5/install-guide/#prepare-java-openjdk
 
-### 
+### HTTPD
+
+http://dev.antoinesolutions.com/apache-server/mod_ssl
+
+https://httpd.apache.org/docs/2.4/ssl/ssl_howto.html
+
+https://www.techrepublic.com/article/how-to-enable-https-on-apache-centos/

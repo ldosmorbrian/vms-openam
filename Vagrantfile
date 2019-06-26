@@ -79,6 +79,8 @@ Vagrant.configure(2) do |config|
     # os config
     sed -i '$ i openam soft nofile 65536' /etc/security/limits.conf
     sed -i '$ i openam hard nofile 131072' /etc/security/limits.conf
+    sed -i '$ i wildfly soft nofile 65536' /etc/security/limits.conf
+    sed -i '$ i wildfly hard nofile 131072' /etc/security/limits.conf
     # httpd
     yum install httpd -y
     systemctl enable httpd.service
@@ -90,17 +92,64 @@ Vagrant.configure(2) do |config|
     systemctl restart httpd.service
     # java
     yum install java-1.8.0-openjdk-devel
-    # tomcat
-    mkdir -p /opt/tomcat
-    tar xvzf /vagrant/apache-tomcat-8.5.42.tar.gz -C /opt/tomcat
-    ln -s /opt/tomcat/apache-tomcat-8.5.42 /opt/tomcat/latest
-    useradd tomcat
-    chown -R tomcat:tomcat /opt/tomcat
-    chmod +x /opt/tomcat/latest/bin/*.sh
-    cp /vagrant/tomcat-service.sysctl /etc/systemd/system/tomcat.service
+    # wildfly
+    tar xzf /vagrant/wildfly-11.0.0.Final.tar.gz -C /opt
+    ln -s /opt/wildfly-11.0.0.Final /opt/wildfly
+    groupadd -r wildfly
+    useradd -r -g wildfly -d /opt/wildfly -s /sbin/nologin wildfly
+    chown -RH wildfly: /opt/wildfly
+    chmod +x /opt/wildfly/bin/*.sh
+    mkdir -p /etc/wildfly
+    cp /opt/wildfly/docs/contrib/scripts/systemd/wildfly.conf /etc/wildfly/
+    cp /opt/wildfly/docs/contrib/scripts/systemd/launch.sh /opt/wildfly/bin/
+    cp /opt/wildfly/docs/contrib/scripts/systemd/wildfly.service /etc/systemd/system/
     systemctl daemon-reload
-    systemctl enable tomcat
-    systemctl start tomcat
+    systemctl enable wildfly
+    systemctl start wildfly
+
+    # OpenDJ
+    sed -i '$ i opendj soft nofile 65536' /etc/security/limits.conf
+    sed -i '$ i opendj hard nofile 131072' /etc/security/limits.conf
+    useradd -r -g opendj -d /opt/opendj -s /sbin/nologin opendj
+
+    echo "Password12345" > /tmp/dspasswd
+
+    # DS for AM Configuration Data
+#    /opt/opendj/setup directory-server \
+#     --rootUserDN "cn=Directory Manager" \
+#     --rootUserPasswordFile /tmp/dspasswd \
+#     --monitorUserPasswordFile /tmp/dspasswd \
+#     --hostname proxy.172.16.12.10.xip.io \
+#     --ldapPort 1389 \
+#     --ldapsPort 1636 \
+#     --httpsPort 9443 \
+#     --adminConnectorPort 4444 \
+#     --productionMode \
+#     --profile am-config \
+#     --set am-config/amConfigAdminPassword:Password12345 \
+#     --acceptLicense
+
+  # DS for AM Identity Data
+  /opt/opendj/setup directory-server \
+   --rootUserDN "cn=Directory Manager" \
+   --rootUserPasswordFile /tmp/dspasswd \
+   --monitorUserPasswordFile /tmp/dspasswd \
+   --hostname proxy.172.16.12.10.xip.io \
+   --ldapPort 1389 \
+   --ldapsPort 1636 \
+   --httpsPort 9443 \
+   --adminConnectorPort 4444 \
+   --productionMode \
+   --profile am-identity-store \
+   --set am-identity-store/amIdentityStoreAdminPassword:Password12345 \
+   --acceptLicense
+
+   # DS -- it is possible to use a single DS to support AM Identity Data, AM Configuration Data, AM CTS and even Policy data.
+   # it supports multiple profiles per "setup" command if we want to.
+   # for now, we'll stick with Identity data only.
+   # https://backstage.forgerock.com/docs/am/6.5/install-guide/#prepare-ext-stores
+
+
 #    ln -s /usr/local/tomcat/conf /etc/tomcat
 #    cp /vagrant/tomcat.conf /etc/tomcat
 #    cp /vagrant/tomcat-service /etc/init.d/tomcat
@@ -110,7 +159,6 @@ Vagrant.configure(2) do |config|
 #    chkconfig tomcat on
 #    # openam
 #    service tomcat stop
-
 #    unzip /vagrant/AM-eval-6.5.1.zip -d /vagrant/
 #    cp /vagrant/openam/AM-eval-6.5.1.war /usr/local/tomcat/webapps/openam.war
 #    chown tomcat:tomcat /usr/local/tomcat/webapps/openam.war
