@@ -110,6 +110,8 @@ Vagrant.configure(2) do |config|
     # OpenDJ
     sed -i '$ i opendj soft nofile 65536' /etc/security/limits.conf
     sed -i '$ i opendj hard nofile 131072' /etc/security/limits.conf
+    sysctl --write fs.inotify.max_user_watches=524288 # TODO: verify this from docs
+    groupadd -r opendj
     useradd -r -g opendj -d /opt/opendj -s /sbin/nologin opendj
 
     echo "Password12345" > /tmp/dspasswd
@@ -148,6 +150,24 @@ Vagrant.configure(2) do |config|
    # it supports multiple profiles per "setup" command if we want to.
    # for now, we'll stick with Identity data only.
    # https://backstage.forgerock.com/docs/am/6.5/install-guide/#prepare-ext-stores
+
+   # Amster
+   mkdir /opt/amster_6.5.1
+   unzip /vagrant/Amster-6.5.1.zip -d /opt/amster_6.5.1
+   export JAVA_HOME=/usr/lib/jvm/java
+
+   # IDM
+   groupadd -r openidm
+   useradd -r -g openidm -d /opt/openidm -s /sbin/nologin openidm
+   unzip /vagrant/IDM-eval-6.5.0.1.zip -d /opt
+   chown -RH openidm: /opt/openidm
+
+   # changing ports in resolver/boot.properties
+   openidm.port.http=7070
+   openidm.port.https=7443
+   openidm.port.mutualauth=7444
+   openidm.host=idm.172.16.12.10.xip.io
+   openidm.auth.clientauthonlyports=7444
 
 
 #    ln -s /usr/local/tomcat/conf /etc/tomcat

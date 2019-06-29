@@ -57,6 +57,9 @@ You are disconnected at the moment. Type 'connect' to connect to the server or '
 sysctl --write fs.inotify.max_user_watches=524288
 
 
+## IDM Notes
+
+
 
 
 Installing OpenAM with GUI
