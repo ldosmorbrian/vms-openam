@@ -41,6 +41,7 @@ Needed to define ServerName globally
 TODO: update certgen tool to include pkcs12 version of certs, example:
 openssl pkcs12 -in MORIARTY.BRIAN.C.crt -inkey MORIARTY.BRIAN.C.key -export -out MORIARTY.BRIAN.C.pkcs12
 
+yum install mod_proxy_html
 ## Wildfly
 
 Enbable AJP:
@@ -251,3 +252,5 @@ http://dev.antoinesolutions.com/apache-server/mod_ssl
 https://httpd.apache.org/docs/2.4/ssl/ssl_howto.html
 
 https://www.techrepublic.com/article/how-to-enable-https-on-apache-centos/
+
+https://stackoverflow.com/questions/21488845/how-can-i-generate-a-self-signed-certificate-with-subjectaltname-using-openssl
