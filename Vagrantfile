@@ -65,33 +65,58 @@ Vagrant.configure(2) do |config|
   # Puppet, Chef, Ansible, Salt, and Docker are also available. Please see the
   # documentation for more information about their specific syntax and use.
   config.vm.provision "shell", inline: <<-SHELL
+    # basics
+    yum install vim -y
     # hostname
     sed -i s/localhost\.localdomain/proxy.172.16.12.10.xip.io/ /etc/sysconfig/network
     sysctl kernel.hostname=proxy.172.16.12.10.xip.io
     # firewall
     iptables -I INPUT -i lo -j ACCEPT
     firewall-cmd --zone=public --permanent --add-port=443/tcp
-    firewall-cmd --zone=public --permanent --add-port=80/tcp
+    #firewall-cmd --zone=public --permanent --add-port=80/tcp
     firewall-cmd --zone=public --permanent --add-port=22/tcp
     firewall-cmd --reload
     # os updates
+    #echo "SKIPPING yum update to speed things up during dev"
     yum update -y
     # os config
     sed -i '$ i openam soft nofile 65536' /etc/security/limits.conf
     sed -i '$ i openam hard nofile 131072' /etc/security/limits.conf
     sed -i '$ i wildfly soft nofile 65536' /etc/security/limits.conf
     sed -i '$ i wildfly hard nofile 131072' /etc/security/limits.conf
+    sed -i '$ i opendj soft nofile 65536' /etc/security/limits.conf
+    sed -i '$ i opendj hard nofile 131072' /etc/security/limits.conf
     # httpd
     yum install httpd -y
-    systemctl enable httpd.service
+    yum install mod_ssl -y
+    /usr/sbin/setsebool -P httpd_can_network_connect 1
+    # stage certs
+    mkdir /vagrant/certs
+    tar xvf /vagrant/certs.tgz -C /vagrant/certs
+    tar xvf /vagrant/certs/root/certgen/proxy.172.16.12.10.xip.io.tgz -C /vagrant/certs
+    # using 'cat' because there were some odd issues when moving or copying the files, uncertain why
+    cat /vagrant/certs/proxy.172.16.12.10.xip.io.crt > /etc/pki/tls/certs/proxy.172.16.12.10.xip.io.crt && chmod 600 /etc/pki/tls/certs/proxy.172.16.12.10.xip.io.crt
+    cat /vagrant/certs/proxy.172.16.12.10.xip.io.key > /etc/pki/tls/private/proxy.172.16.12.10.xip.io.key && chmod 600 /etc/pki/tls/private/proxy.172.16.12.10.xip.io.key
+    tar xvf /vagrant/ca.tgz -C /vagrant/certs
+    cat /vagrant/certs/ca.crt > /etc/pki/tls/certs/ca-bundle.crt && chmod 600 /etc/pki/tls/certs/ca-bundle.crt
+    sed -i 's/\/etc\/pki\/tls\/certs\/localhost.crt/\/etc\/pki\/tls\/certs\/proxy.172.16.12.10.xip.io.crt/' /etc/httpd/conf.d/ssl.conf
+    sed -i 's/\/etc\/pki\/tls\/private\/localhost.key/\/etc\/pki\/tls\/private\/proxy.172.16.12.10.xip.io.key/' /etc/httpd/conf.d/ssl.conf
+    sed -i 's/#SSLCACertificateFile/SSLCACertificateFile/' /etc/httpd/conf.d/ssl.conf
+    sed -i 's/#SSLVerifyClient/SSLVerifyClient/' /etc/httpd/conf.d/ssl.conf
+    sed -i 's/#SSLVerifyDepth/SSLVerifyDepth/' /etc/httpd/conf.d/ssl.conf
+    echo '#' >> /etc/httpd/conf/httpd.conf
     echo 'ProxyPass /openam               ajp://localhost:8009/openam' >> /etc/httpd/conf/httpd.conf
     echo 'ProxyPassReverse /openam        ajp://localhost:8009/openam' >> /etc/httpd/conf/httpd.conf
     echo '#' >> /etc/httpd/conf/httpd.conf
-    echo 'ProxyPass /examples             ajp://localhost:8009/examples' >> /etc/httpd/conf/httpd.conf
-    echo 'ProxyPassReverse /examples      ajp://localhost:8009/examples' >> /etc/httpd/conf/httpd.conf
+    echo 'ProxyPass /openidm               http://localhost:7070/openidm' >> /etc/httpd/conf/httpd.conf
+    echo 'ProxyPassReverse /openidm        http://localhost:7070/openidm' >> /etc/httpd/conf/httpd.conf
+    echo '#' >> /etc/httpd/conf/httpd.conf
+    echo 'ProxyPass /idm               http://localhost:7070/idm' >> /etc/httpd/conf/httpd.conf
+    echo 'ProxyPassReverse /idm        http://localhost:7070/idm' >> /etc/httpd/conf/httpd.conf
+    systemctl enable httpd.service
     systemctl restart httpd.service
     # java
-    yum install java-1.8.0-openjdk-devel
+    yum install java-1.8.0-openjdk-devel -y
     # wildfly
     tar xzf /vagrant/wildfly-11.0.0.Final.tar.gz -C /opt
     ln -s /opt/wildfly-11.0.0.Final /opt/wildfly
@@ -132,42 +157,43 @@ Vagrant.configure(2) do |config|
 #     --acceptLicense
 
   # DS for AM Identity Data
-  /opt/opendj/setup directory-server \
-   --rootUserDN "cn=Directory Manager" \
-   --rootUserPasswordFile /tmp/dspasswd \
-   --monitorUserPasswordFile /tmp/dspasswd \
-   --hostname proxy.172.16.12.10.xip.io \
-   --ldapPort 1389 \
-   --ldapsPort 1636 \
-   --httpsPort 9443 \
-   --adminConnectorPort 4444 \
-   --productionMode \
-   --profile am-identity-store \
-   --set am-identity-store/amIdentityStoreAdminPassword:Password12345 \
-   --acceptLicense
+#  /opt/opendj/setup directory-server \
+#   --rootUserDN "cn=Directory Manager" \
+#   --rootUserPasswordFile /tmp/dspasswd \
+#   --monitorUserPasswordFile /tmp/dspasswd \
+#   --hostname proxy.172.16.12.10.xip.io \
+#   --ldapPort 1389 \
+#   --ldapsPort 1636 \
+#   --httpsPort 9443 \
+#   --adminConnectorPort 4444 \
+#   --productionMode \
+#   --profile am-identity-store \
+#   --set am-identity-store/amIdentityStoreAdminPassword:Password12345 \
+#   --acceptLicense
 
    # DS -- it is possible to use a single DS to support AM Identity Data, AM Configuration Data, AM CTS and even Policy data.
    # it supports multiple profiles per "setup" command if we want to.
    # for now, we'll stick with Identity data only.
    # https://backstage.forgerock.com/docs/am/6.5/install-guide/#prepare-ext-stores
+   yum install unzip -y
 
    # Amster
-   mkdir /opt/amster_6.5.1
-   unzip /vagrant/Amster-6.5.1.zip -d /opt/amster_6.5.1
+   mkdir /opt/amster_6.5.2
+   unzip -q /vagrant/Amster-6.5.2.zip -d /opt/amster_6.5.2
    export JAVA_HOME=/usr/lib/jvm/java
 
    # IDM
    groupadd -r openidm
    useradd -r -g openidm -d /opt/openidm -s /sbin/nologin openidm
-   unzip /vagrant/IDM-eval-6.5.0.1.zip -d /opt
+   unzip -q /vagrant/IDM-eval-6.5.0.1.zip -d /opt
    chown -RH openidm: /opt/openidm
 
    # changing ports in resolver/boot.properties
-   openidm.port.http=7070
-   openidm.port.https=7443
-   openidm.port.mutualauth=7444
-   openidm.host=idm.172.16.12.10.xip.io
-   openidm.auth.clientauthonlyports=7444
+#   openidm.port.http=7070
+#   openidm.port.https=7443
+#   openidm.port.mutualauth=7444
+#   openidm.host=idm.172.16.12.10.xip.io
+#   openidm.auth.clientauthonlyports=7444
 
 
 #    ln -s /usr/local/tomcat/conf /etc/tomcat

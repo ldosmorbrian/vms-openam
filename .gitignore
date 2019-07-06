@@ -5,6 +5,8 @@
 *.swp
 *.out
 *.log
+*.tgz
+*.zip
 
 # rails specific
 *.sqlite3
@@ -85,6 +87,7 @@ vendor
 card.config
 jssecacerts
 pkcs11.config
+certs/*
 
 scripts/**/*.csv
 scripts/**/*.json
