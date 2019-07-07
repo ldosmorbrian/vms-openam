@@ -7,6 +7,7 @@
 *.log
 *.tgz
 *.zip
+*.gz
 
 # rails specific
 *.sqlite3
