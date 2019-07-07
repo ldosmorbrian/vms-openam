@@ -70,8 +70,12 @@ Vagrant.configure(2) do |config|
     # hostname
     sed -i s/localhost\.localdomain/proxy.172.16.12.10.xip.io/ /etc/sysconfig/network
     sysctl kernel.hostname=proxy.172.16.12.10.xip.io
+    # use /etc/hosts since xip.io has rate limits that could cause intermittant issues
+    echo "172.16.12.10 proxy.172.16.12.10.xip.io >> /etc/hosts"
     # firewall
-    iptables -I INPUT -i lo -j ACCEPT
+    #iptables -I INPUT -i lo -j ACCEPT
+    systemctl enable firewalld
+    systemctl firewalld start
     firewall-cmd --zone=public --permanent --add-port=443/tcp
     #firewall-cmd --zone=public --permanent --add-port=80/tcp
     firewall-cmd --zone=public --permanent --add-port=22/tcp
@@ -133,8 +137,6 @@ Vagrant.configure(2) do |config|
     systemctl start wildfly
 
     # OpenDJ
-    sed -i '$ i opendj soft nofile 65536' /etc/security/limits.conf
-    sed -i '$ i opendj hard nofile 131072' /etc/security/limits.conf
     sysctl --write fs.inotify.max_user_watches=524288 # TODO: verify this from docs
     groupadd -r opendj
     useradd -r -g opendj -d /opt/opendj -s /sbin/nologin opendj
@@ -156,20 +158,24 @@ Vagrant.configure(2) do |config|
 #     --set am-config/amConfigAdminPassword:Password12345 \
 #     --acceptLicense
 
+  unzip -q /vagrant/DS-eval-6.5.2.zip -d /opt
+  chown -R opendj: /opt/opendj
+
   # DS for AM Identity Data
-#  /opt/opendj/setup directory-server \
-#   --rootUserDN "cn=Directory Manager" \
-#   --rootUserPasswordFile /tmp/dspasswd \
-#   --monitorUserPasswordFile /tmp/dspasswd \
-#   --hostname proxy.172.16.12.10.xip.io \
-#   --ldapPort 1389 \
-#   --ldapsPort 1636 \
-#   --httpsPort 9443 \
-#   --adminConnectorPort 4444 \
-#   --productionMode \
-#   --profile am-identity-store \
-#   --set am-identity-store/amIdentityStoreAdminPassword:Password12345 \
-#   --acceptLicense
+  sudo -uopendj bash -C /opt/opendj/setup directory-server \
+   --rootUserDN "cn=Directory Manager" \
+   --rootUserPasswordFile /tmp/dspasswd \
+   --monitorUserPasswordFile /tmp/dspasswd \
+   --hostname proxy.172.16.12.10.xip.io \
+   --ldapPort 1389 \
+   --ldapsPort 1636 \
+   --httpsPort 9443 \
+   --adminConnectorPort 4444 \
+   --profile am-identity-store \
+   --set am-identity-store/amIdentityStoreAdminPassword:Password12345 \
+   --acceptLicense
+
+   #--productionMode \
 
    # DS -- it is possible to use a single DS to support AM Identity Data, AM Configuration Data, AM CTS and even Policy data.
    # it supports multiple profiles per "setup" command if we want to.
@@ -181,6 +187,40 @@ Vagrant.configure(2) do |config|
    mkdir /opt/amster_6.5.2
    unzip -q /vagrant/Amster-6.5.2.zip -d /opt/amster_6.5.2
    export JAVA_HOME=/usr/lib/jvm/java
+
+   # AM
+   # edit /opt/wildfly/bin/standalone.conf:
+   #JAVA_OPTS="-Xms1024m -Xmx1024m -XX:MetaspaceSize=256M -XX:MaxMetaspaceSize=256m -Djava.net.preferIPv4Stack=true"
+   #JAVA_OPTS="$JAVA_OPTS -Djboss.modules.system.pkgs=$JBOSS_MODULES_SYSTEM_PKGS -Djava.awt.headless=true"
+   #JAVA_OPTS="$JAVA_OPTS -Dorg.apache.tomcat.util.http.ServerCookie.ALWAYS_ADD_EXPIRES=true"
+   #JAVA_OPTS="$JAVA_OPTS -Dorg.forgerock.openam.ldap.secure.protocol.version=TLSv1.2"
+
+   # inside the war, edit the file: WEB-INF/classes/bootstrap.properties
+   # uncomment the config.dir property, and set as follows:
+   # configuration.dir=/opt/am-config
+
+   # enable AJP
+   /opt/wildfly/bin/jboss-cli.sh --connect --commands="/subsystem=undertow/server=default-server/ajp-listener=myListener:add(socket-binding=ajp, scheme=http, enabled=true)"
+   
+   # provide am configuration folder
+   mkdir /opt/am-config
+   chown wildfly: /opt/am-config
+
+   # extrac am, modify war for use with Wildfly
+   unzip -q /vagrant/AM-eval-6.5.2.zip -d /opt
+   mkdir /tmp/am-boot; pushd /tmp/am-boot
+   jar xf /opt/openam/AM-eval-6.5.2.war WEB-INF/classes/bootstrap.properties
+   sed -i 's/# configuration.dir=$/configuration.dir=\/opt\/am-config/' WEB-INF/classes/bootstrap.properties 
+   jar uf /opt/openam/AM-eval-6.5.2.war WEB-INF/classes/bootstrap.properties
+   popd
+
+   # deploy war (we'll stop jboss to be safe)
+   systemctl stop wildfly
+   cp /opt/openam/AM-eval-6.5.2.war /opt/wildfly/standalone/deployments/openam.war
+   chown wildfly: /opt/wildfly/standalone/deployments/openam.war
+   systemctl start wildfly
+
+   # for EAP / AS we would remove WEB-INF/jboss-all.xml
 
    # IDM
    groupadd -r openidm
