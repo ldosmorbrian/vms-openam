@@ -228,14 +228,24 @@ Vagrant.configure(2) do |config|
    unzip -q /vagrant/IDM-eval-6.5.0.1.zip -d /opt
    chown -RH openidm: /opt/openidm
 
-   # changing ports in resolver/boot.properties
-#   openidm.port.http=7070
-#   openidm.port.https=7443
-#   openidm.port.mutualauth=7444
-#   openidm.host=idm.172.16.12.10.xip.io
-#   openidm.auth.clientauthonlyports=7444
+   sed -i 's/openidm.port.http=8080/openidm.port.http=7070/' /opt/openidm/resolver/boot.properties
+   sed -i 's/openidm.port.https=8443/openidm.port.https=7443/' /opt/openidm/resolver/boot.properties
+   sed -i 's/openidm.port.mutualauth=8444/openidm.port.mutualauth=7444/' /opt/openidm/resolver/boot.properties
+   sed -i 's/openidm.auth.clientauthonlyports=8444/openidm.auth.clientauthonlyports=7444/' /opt/openidm/resolver/boot.properties
+   sed -i 's/openidm.host=localhost/openidm.host=proxy.172.16.12.10.xip.io/' /opt/openidm/resolver/boot.properties
 
+   # change paths because behind proxy
+   sed -i 's/"urlContextRoot" : "\//"urlContextRoot" : "\/idm\//' /opt/openidm/conf/ui.context-admin.json
+   sed -i 's/"urlContextRoot" : "\//"urlContextRoot" : "\/idm\//' /opt/openidm/conf/ui.context-api.json
+   sed -i 's/"urlContextRoot" : "\//"urlContextRoot" : "\/idm\//' /opt/openidm/conf/ui.context-oauth.json
+   # this one is base path
+   sed -i 's/"urlContextRoot" : "\//"urlContextRoot" : "\/idm/' /opt/openidm/conf/ui.context-enduser.json
 
+   # TODO: see how to run as a service
+   # for now, following full stack samples
+   # run like this:
+   #  sudo -uopenidm bash -C ./startup.sh -p samples/full-stack
+   
 #    ln -s /usr/local/tomcat/conf /etc/tomcat
 #    cp /vagrant/tomcat.conf /etc/tomcat
 #    cp /vagrant/tomcat-service /etc/init.d/tomcat
