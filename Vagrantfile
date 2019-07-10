@@ -243,7 +243,7 @@ Vagrant.configure(2) do |config|
    chown wildfly: /opt/wildfly/standalone/deployments/openam.war
    systemctl start wildfly
 
-   /opt/wildfly/bin/jboss-cli.sh --connect --commands="/subsystem=undertow/server=default-server/ajp-listener=myListener:add(socket-binding=ajp, scheme=http, enabled=true)"
+   /opt/wildfly/bin/jboss-cli.sh --connect --commands="/subsystem=undertow/server=default-server/ajp-listener=ajpListener:add(socket-binding=ajp, scheme=https, enabled=true)"
 
    # for EAP / AS we would remove WEB-INF/jboss-all.xml
 
