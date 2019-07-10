@@ -67,8 +67,9 @@ Vagrant.configure(2) do |config|
   config.vm.provision "shell", inline: <<-SHELL
     # basics
     yum install vim -y
+    yum install unzip -y
     # hostname
-    sed -i s/localhost\.localdomain/proxy.172.16.12.10.xip.io/ /etc/sysconfig/network
+    sed -i 's/localhost\.localdomain/proxy.172.16.12.10.xip.io/' /etc/sysconfig/network
     sysctl kernel.hostname=proxy.172.16.12.10.xip.io
     # use /etc/hosts since xip.io has rate limits that could cause intermittant issues
     echo "172.16.12.10 proxy.172.16.12.10.xip.io >> /etc/hosts"
@@ -96,13 +97,13 @@ Vagrant.configure(2) do |config|
     /usr/sbin/setsebool -P httpd_can_network_connect 1
     # stage certs
     mkdir /vagrant/certs
-    tar xvf /vagrant/certs.tgz -C /vagrant/certs
-    tar xvf /vagrant/certs/root/certgen/proxy.172.16.12.10.xip.io.tgz -C /vagrant/certs
+    tar xf /vagrant/certgen.tgz -C /vagrant/certs
+    tar xf /vagrant/certs/certgen/proxy.172.16.12.10.xip.io.tgz -C /vagrant/certs
     # using 'cat' because there were some odd issues when moving or copying the files, uncertain why
     cat /vagrant/certs/proxy.172.16.12.10.xip.io.crt > /etc/pki/tls/certs/proxy.172.16.12.10.xip.io.crt && chmod 600 /etc/pki/tls/certs/proxy.172.16.12.10.xip.io.crt
     cat /vagrant/certs/proxy.172.16.12.10.xip.io.key > /etc/pki/tls/private/proxy.172.16.12.10.xip.io.key && chmod 600 /etc/pki/tls/private/proxy.172.16.12.10.xip.io.key
-    tar xvf /vagrant/ca.tgz -C /vagrant/certs
-    cat /vagrant/certs/ca.crt > /etc/pki/tls/certs/ca-bundle.crt && chmod 600 /etc/pki/tls/certs/ca-bundle.crt
+    rm -f /etc/pki/tls/certs/ca-bundle.crt
+    cat /vagrant/certs/certgen/ca.crt > /etc/pki/tls/certs/ca-bundle.crt && chmod 600 /etc/pki/tls/certs/ca-bundle.crt
     sed -i 's/\/etc\/pki\/tls\/certs\/localhost.crt/\/etc\/pki\/tls\/certs\/proxy.172.16.12.10.xip.io.crt/' /etc/httpd/conf.d/ssl.conf
     sed -i 's/\/etc\/pki\/tls\/private\/localhost.key/\/etc\/pki\/tls\/private\/proxy.172.16.12.10.xip.io.key/' /etc/httpd/conf.d/ssl.conf
     sed -i 's/#SSLCACertificateFile/SSLCACertificateFile/' /etc/httpd/conf.d/ssl.conf
@@ -158,7 +159,7 @@ Vagrant.configure(2) do |config|
 #     --set am-config/amConfigAdminPassword:Password12345 \
 #     --acceptLicense
 
-  unzip -q /vagrant/DS-eval-6.5.2.zip -d /opt
+  unzip -q /vagrant/DS-eval-6.5.1.zip -d /opt
   chown -R opendj: /opt/opendj
 
   # DS for AM Identity Data
@@ -175,17 +176,42 @@ Vagrant.configure(2) do |config|
    --set am-identity-store/amIdentityStoreAdminPassword:Password12345 \
    --acceptLicense
 
+   # add the base dn
+   dsconfig \
+    set-backend-prop \
+    --hostname proxy.172.16.12.10.xip.io \
+    --port 4444 \
+    --bindDN "cn=Directory Manager" \
+    --bindPassword Password12345 \
+    --backend-name amIdentityStore \
+    --add base-dn:dc=example,dc=com \
+    --trustAll \
+    --no-prompt
+
+   # stop DS (required because import happens offline)
+   /opt/opendj/bin/stop-ds
+
+   # load the base ldif (example, need to provide actual ldif, this will fail until then)
+   opendj/bin/import-ldif -b dc=example,dc=com -n amIdentityStore -l Example.ldif --offline
+
+   # start DS
+   /opt/opendj/bin/start-ds
+
+   # TODO: OpenAM realm doesn't point to our baseDn by default, had to edit it manually
+
+   #--baseDn dc=example,dc=com \
+   #--addBaseEntry \
+
    #--productionMode \
 
    # DS -- it is possible to use a single DS to support AM Identity Data, AM Configuration Data, AM CTS and even Policy data.
    # it supports multiple profiles per "setup" command if we want to.
    # for now, we'll stick with Identity data only.
    # https://backstage.forgerock.com/docs/am/6.5/install-guide/#prepare-ext-stores
-   yum install unzip -y
 
    # Amster
-   mkdir /opt/amster_6.5.2
-   unzip -q /vagrant/Amster-6.5.2.zip -d /opt/amster_6.5.2
+   mkdir /opt/amster_6.5.1
+   unzip -q /vagrant/Amster-6.5.1.zip -d /opt/amster_6.5.1
    export JAVA_HOME=/usr/lib/jvm/java
 
    # AM
@@ -199,26 +225,25 @@ Vagrant.configure(2) do |config|
    # uncomment the config.dir property, and set as follows:
    # configuration.dir=/opt/am-config
 
-   # enable AJP
-   /opt/wildfly/bin/jboss-cli.sh --connect --commands="/subsystem=undertow/server=default-server/ajp-listener=myListener:add(socket-binding=ajp, scheme=http, enabled=true)"
-   
    # provide am configuration folder
    mkdir /opt/am-config
    chown wildfly: /opt/am-config
 
    # extrac am, modify war for use with Wildfly
-   unzip -q /vagrant/AM-eval-6.5.2.zip -d /opt
+   unzip -q /vagrant/AM-eval-6.5.1.zip -d /opt
    mkdir /tmp/am-boot; pushd /tmp/am-boot
-   jar xf /opt/openam/AM-eval-6.5.2.war WEB-INF/classes/bootstrap.properties
+   jar xf /opt/openam/AM-eval-6.5.1.war WEB-INF/classes/bootstrap.properties
    sed -i 's/# configuration.dir=$/configuration.dir=\/opt\/am-config/' WEB-INF/classes/bootstrap.properties 
-   jar uf /opt/openam/AM-eval-6.5.2.war WEB-INF/classes/bootstrap.properties
+   jar uf /opt/openam/AM-eval-6.5.1.war WEB-INF/classes/bootstrap.properties
    popd
 
    # deploy war (we'll stop jboss to be safe)
    systemctl stop wildfly
-   cp /opt/openam/AM-eval-6.5.2.war /opt/wildfly/standalone/deployments/openam.war
+   cp /opt/openam/AM-eval-6.5.1.war /opt/wildfly/standalone/deployments/openam.war
    chown wildfly: /opt/wildfly/standalone/deployments/openam.war
    systemctl start wildfly
+
+   /opt/wildfly/bin/jboss-cli.sh --connect --commands="/subsystem=undertow/server=default-server/ajp-listener=myListener:add(socket-binding=ajp, scheme=http, enabled=true)"
 
    # for EAP / AS we would remove WEB-INF/jboss-all.xml
 
@@ -246,20 +271,6 @@ Vagrant.configure(2) do |config|
    # run like this:
    #  sudo -uopenidm bash -C ./startup.sh -p samples/full-stack
    
-#    ln -s /usr/local/tomcat/conf /etc/tomcat
-#    cp /vagrant/tomcat.conf /etc/tomcat
-#    cp /vagrant/tomcat-service /etc/init.d/tomcat
-#    sed -i 's/Connector port/Connector URIEncoding="UTF-8" port/' /etc/tomcat/server.xml
-#    chown -R tomcat:tomcat /usr/local/apache-tomcat-8.0.42
-#    chmod 755 /etc/init.d/tomcat
-#    chkconfig tomcat on
-#    # openam
-#    service tomcat stop
-#    unzip /vagrant/AM-eval-6.5.1.zip -d /vagrant/
-#    cp /vagrant/openam/AM-eval-6.5.1.war /usr/local/tomcat/webapps/openam.war
-#    chown tomcat:tomcat /usr/local/tomcat/webapps/openam.war
-#    # start tomcat
-#    service tomcat start
 #    # Extract web policy agent
 #    unzip /vagrant/Apache_v22_Linux_64bit_4.0.0.zip -d /opt
 #    chown -R apache:apache /opt/web_agents
