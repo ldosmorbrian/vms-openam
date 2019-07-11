@@ -253,6 +253,8 @@ Vagrant.configure(2) do |config|
    unzip -q /vagrant/IDM-eval-6.5.0.1.zip -d /opt
    chown -RH openidm: /opt/openidm
 
+   keytool -importcert -file /vagrant/certs/certgen/ca.crt -keystore /opt/openidm/security/truststore -alias bcm-devel-ca -trustcacerts
+
    sed -i 's/openidm.port.http=8080/openidm.port.http=7070/' /opt/openidm/resolver/boot.properties
    sed -i 's/openidm.port.https=8443/openidm.port.https=7443/' /opt/openidm/resolver/boot.properties
    sed -i 's/openidm.port.mutualauth=8444/openidm.port.mutualauth=7444/' /opt/openidm/resolver/boot.properties
