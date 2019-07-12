@@ -192,7 +192,7 @@ Vagrant.configure(2) do |config|
    /opt/opendj/bin/stop-ds
 
    # load the base ldif (example, need to provide actual ldif, this will fail until then)
-   opendj/bin/import-ldif -b dc=example,dc=com -n amIdentityStore -l Example.ldif --offline
+   /opt/opendj/bin/import-ldif -b dc=example,dc=com -n amIdentityStore -l Example.ldif --offline
 
    # start DS
    /opt/opendj/bin/start-ds
@@ -220,6 +220,11 @@ Vagrant.configure(2) do |config|
    #JAVA_OPTS="$JAVA_OPTS -Djboss.modules.system.pkgs=$JBOSS_MODULES_SYSTEM_PKGS -Djava.awt.headless=true"
    #JAVA_OPTS="$JAVA_OPTS -Dorg.apache.tomcat.util.http.ServerCookie.ALWAYS_ADD_EXPIRES=true"
    #JAVA_OPTS="$JAVA_OPTS -Dorg.forgerock.openam.ldap.secure.protocol.version=TLSv1.2"
+   #
+   # possibly required for IDM integration
+   # JAVA_OPTS="$JAVA_OPTS -Djavax.net.ssl.trustStore=/opt/openidm/security/truststore"
+   # JAVA_OPTS="$JAVA_OPTS -Djavax.net.ssl.trustStorePassword=changeit"
+
 
    # inside the war, edit the file: WEB-INF/classes/bootstrap.properties
    # uncomment the config.dir property, and set as follows:
@@ -229,7 +234,7 @@ Vagrant.configure(2) do |config|
    mkdir /opt/am-config
    chown wildfly: /opt/am-config
 
-   # extrac am, modify war for use with Wildfly
+   # extract am, modify war for use with Wildfly
    unzip -q /vagrant/AM-eval-6.5.1.zip -d /opt
    mkdir /tmp/am-boot; pushd /tmp/am-boot
    jar xf /opt/openam/AM-eval-6.5.1.war WEB-INF/classes/bootstrap.properties
@@ -243,6 +248,7 @@ Vagrant.configure(2) do |config|
    chown wildfly: /opt/wildfly/standalone/deployments/openam.war
    systemctl start wildfly
 
+   # enable AJP, set scheme to https so redirects work correctly
    /opt/wildfly/bin/jboss-cli.sh --connect --commands="/subsystem=undertow/server=default-server/ajp-listener=ajpListener:add(socket-binding=ajp, scheme=https, enabled=true)"
 
    # for EAP / AS we would remove WEB-INF/jboss-all.xml
@@ -271,7 +277,7 @@ Vagrant.configure(2) do |config|
    # TODO: see how to run as a service
    # for now, following full stack samples
    # run like this:
-   #  sudo -uopenidm bash -C ./startup.sh -p samples/full-stack
+   #  sudo -uopenidm bash -C /opt/openidm/startup.sh -p /opt/openidm/samples/full-stack
    
 #    # Extract web policy agent
 #    unzip /vagrant/Apache_v22_Linux_64bit_4.0.0.zip -d /opt
