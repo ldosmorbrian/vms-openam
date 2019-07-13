@@ -191,6 +191,12 @@ Vagrant.configure(2) do |config|
    # stop DS (required because import happens offline)
    /opt/opendj/bin/stop-ds
 
+   # example search
+   # /opt/opendj/bin/ldapsearch --port 1389 --baseDN dc=example,dc=com "ou=People"
+   #
+   # example export ldif
+   # /opt/opendj/bin/export-ldif --hostname proxy.172.16.12.10.xip.io --port 1389 --bindDN "cn=Directory Manager" --bindPassword Password12345 --backendID amIdentityStore --includeBranch dc=example,dc=com --ldifFile /tmp/backup.ldif --start 0
+   #
    # load the base ldif (example, need to provide actual ldif, this will fail until then)
    /opt/opendj/bin/import-ldif -b dc=example,dc=com -n amIdentityStore -l Example.ldif --offline
 
