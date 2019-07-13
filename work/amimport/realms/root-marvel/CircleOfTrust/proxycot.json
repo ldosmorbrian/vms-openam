@@ -1,0 +1,19 @@
+{
+  "metadata" : {
+    "realm" : "/marvel",
+    "amsterVersion" : "6.5.1",
+    "entityType" : "CircleOfTrust",
+    "entityId" : "proxycot",
+    "pathParams" : { }
+  },
+  "data" : {
+    "_id" : "proxycot",
+    "status" : "active",
+    "trustedProviders" : [ "http://proxy.172.16.12.10.xip.io:80/openam|saml2", "https://proxy.172.16.12.10.xip.io/fedlet|saml2" ],
+    "_type" : {
+      "_id" : "circlesoftrust",
+      "name" : "Circle of Trust",
+      "collection" : true
+    }
+  }
+}

@@ -214,6 +214,35 @@ Vagrant.configure(2) do |config|
    unzip -q /vagrant/Amster-6.5.1.zip -d /opt/amster_6.5.1
    export JAVA_HOME=/usr/lib/jvm/java
 
+   #
+   # we will still probably need ssoadm because amster does not support offline configuration
+   # ssoadm does support creating realms and that kind of thing, so we need to create a realm with right name
+   # before we can import the realm configuration.
+   #
+   # some examples (although i expect we'll let the realm import include the datastore, rather than using ssoadm)
+   #
+   # /opt/ssoadm/openam/bin/ssoadm create-realm -e /bcm -u amadmin -f /tmp/ssopassword
+   #
+   # /opt/ssoadm/openam/bin/ssoadm create-datastore -e /bcm -u amadmin -f /tmp/ssopassword -m my-users-bcm -t LDAPv3ForOpenDS -D /opt/bmoriarty/DATASTORE_DATA_FILE
+   #
+   # /opt/ssoadm/openam/bin/ssoadm delete-datastores -e /bcm -u amadmin -f /tmp/ssopassword -m embedded
+   #
+
+   # using amster examples
+   # /opt/amster_6.5.1/amster -Djavax.net.ssl.trustStore=/opt/openidm/security/truststore /opt/amster_6.5.1/samples/export-bcm.amster
+   #
+   # example export-bcm-script contained:
+   # connect -i https://proxy.172.16.12.10.xip.io/openam 
+   # export-config --path /tmp/amexport
+   # :exit
+   #
+   # listing keys with keytool (to check for sms.transport.key)
+   # keytool -list -v -storetype jceks -keystore /opt/am-config/openam/keystore.jceks -storepass:file /opt/am-config/openam/.storepass
+   #
+   # adding transport key if needed
+   # keytool -genseckey -alias "sms.transport.key" -keyalg AES -keysize 128 -storetype jceks -keystore /opt/am-config/openam/keystore.jceks -storepass:file /opt/am-config/openam/.storepass -keypass:file /opt/am-config/openam/.keypass
+
+
    # AM
    # edit /opt/wildfly/bin/standalone.conf:
    #JAVA_OPTS="-Xms1024m -Xmx1024m -XX:MetaspaceSize=256M -XX:MaxMetaspaceSize=256m -Djava.net.preferIPv4Stack=true"
