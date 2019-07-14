@@ -48,7 +48,7 @@ Vagrant.configure(2) do |config|
     # vb.gui = true
   
     # Customize the amount of memory on the VM:
-    vb.memory = "8192"
+    vb.memory = "7192"
   end
   #
   # View the documentation for the provider you are using for more
@@ -65,25 +65,26 @@ Vagrant.configure(2) do |config|
   # Puppet, Chef, Ansible, Salt, and Docker are also available. Please see the
   # documentation for more information about their specific syntax and use.
   config.vm.provision "shell", inline: <<-SHELL
+    pushd /tmp
     # basics
     yum install vim -y
     yum install unzip -y
     # hostname
-    sed -i 's/localhost\.localdomain/proxy.172.16.12.10.xip.io/' /etc/sysconfig/network
+    sed -i 's/localhost\\.localdomain/proxy.172.16.12.10.xip.io/' /etc/sysconfig/network
     sysctl kernel.hostname=proxy.172.16.12.10.xip.io
     # use /etc/hosts since xip.io has rate limits that could cause intermittant issues
     echo "172.16.12.10 proxy.172.16.12.10.xip.io >> /etc/hosts"
     # firewall
     #iptables -I INPUT -i lo -j ACCEPT
     systemctl enable firewalld
-    systemctl firewalld start
+    systemctl start firewalld
     firewall-cmd --zone=public --permanent --add-port=443/tcp
     #firewall-cmd --zone=public --permanent --add-port=80/tcp
     firewall-cmd --zone=public --permanent --add-port=22/tcp
     firewall-cmd --reload
     # os updates
     #echo "SKIPPING yum update to speed things up during dev"
-    yum update -y
+    #yum update -y
     # os config
     sed -i '$ i openam soft nofile 65536' /etc/security/limits.conf
     sed -i '$ i openam hard nofile 131072' /etc/security/limits.conf
@@ -103,9 +104,9 @@ Vagrant.configure(2) do |config|
     cat /vagrant/certs/proxy.172.16.12.10.xip.io.crt > /etc/pki/tls/certs/proxy.172.16.12.10.xip.io.crt && chmod 600 /etc/pki/tls/certs/proxy.172.16.12.10.xip.io.crt
     cat /vagrant/certs/proxy.172.16.12.10.xip.io.key > /etc/pki/tls/private/proxy.172.16.12.10.xip.io.key && chmod 600 /etc/pki/tls/private/proxy.172.16.12.10.xip.io.key
     rm -f /etc/pki/tls/certs/ca-bundle.crt
-    cat /vagrant/certs/certgen/ca.crt > /etc/pki/tls/certs/ca-bundle.crt && chmod 600 /etc/pki/tls/certs/ca-bundle.crt
-    sed -i 's/\/etc\/pki\/tls\/certs\/localhost.crt/\/etc\/pki\/tls\/certs\/proxy.172.16.12.10.xip.io.crt/' /etc/httpd/conf.d/ssl.conf
-    sed -i 's/\/etc\/pki\/tls\/private\/localhost.key/\/etc\/pki\/tls\/private\/proxy.172.16.12.10.xip.io.key/' /etc/httpd/conf.d/ssl.conf
+    cat /vagrant/certs/ca.crt > /etc/pki/tls/certs/ca-bundle.crt && chmod 600 /etc/pki/tls/certs/ca-bundle.crt
+    sed -i 's/\\/etc\\/pki\\/tls\\/certs\\/localhost.crt/\\/etc\\/pki\\/tls\\/certs\\/proxy.172.16.12.10.xip.io.crt/' /etc/httpd/conf.d/ssl.conf
+    sed -i 's/\\/etc\\/pki\\/tls\\/private\\/localhost.key/\\/etc\\/pki\\/tls\\/private\\/proxy.172.16.12.10.xip.io.key/' /etc/httpd/conf.d/ssl.conf
     sed -i 's/#SSLCACertificateFile/SSLCACertificateFile/' /etc/httpd/conf.d/ssl.conf
     sed -i 's/#SSLVerifyClient/SSLVerifyClient/' /etc/httpd/conf.d/ssl.conf
     sed -i 's/#SSLVerifyDepth/SSLVerifyDepth/' /etc/httpd/conf.d/ssl.conf
@@ -159,8 +160,17 @@ Vagrant.configure(2) do |config|
 #     --set am-config/amConfigAdminPassword:Password12345 \
 #     --acceptLicense
 
-  unzip -q /vagrant/DS-eval-6.5.1.zip -d /opt
+  # DS Extract
+  unzip -q /vagrant/DS-eval-6.5.2.zip -d /opt
   chown -R opendj: /opt/opendj
+
+   # IDM Extract
+   groupadd -r openidm
+   useradd -r -g openidm -d /opt/openidm -s /sbin/nologin openidm
+   unzip -q /vagrant/IDM-eval-6.5.0.1.zip -d /opt
+   chown -RH openidm: /opt/openidm
+
+  # DS Configure
 
   # DS for AM Identity Data
   sudo -uopendj bash -C /opt/opendj/setup directory-server \
@@ -177,7 +187,7 @@ Vagrant.configure(2) do |config|
    --acceptLicense
 
    # add the base dn
-   dsconfig \
+   sudo -uopendj bash -C /opt/opendj/bin/dsconfig \
     set-backend-prop \
     --hostname proxy.172.16.12.10.xip.io \
     --port 4444 \
@@ -188,8 +198,15 @@ Vagrant.configure(2) do |config|
     --trustAll \
     --no-prompt
 
+
    # stop DS (required because import happens offline)
    /opt/opendj/bin/stop-ds
+
+   # ofline: load the base ldif (example, need to provide actual ldif, this will fail until then)
+   /opt/opendj/bin/import-ldif -b dc=example,dc=com -n amIdentityStore -l /opt/openidm/samples/full-stack/data/Example.ldif --offline
+
+   # start DS
+   /opt/opendj/bin/start-ds
 
    # example search
    # /opt/opendj/bin/ldapsearch --port 1389 --baseDN dc=example,dc=com "ou=People"
@@ -197,18 +214,13 @@ Vagrant.configure(2) do |config|
    # example export ldif
    # /opt/opendj/bin/export-ldif --hostname proxy.172.16.12.10.xip.io --port 1389 --bindDN "cn=Directory Manager" --bindPassword Password12345 --backendID amIdentityStore --includeBranch dc=example,dc=com --ldifFile /tmp/backup.ldif --start 0
    #
-   # load the base ldif (example, need to provide actual ldif, this will fail until then)
-   /opt/opendj/bin/import-ldif -b dc=example,dc=com -n amIdentityStore -l Example.ldif --offline
 
-   # start DS
-   /opt/opendj/bin/start-ds
 
    # TODO: OpenAM realm doesn't point to our baseDn by default, had to edit it manually
 
-   #--baseDn dc=example,dc=com \
-   #--addBaseEntry \
-
-   #--productionMode \
+   #tbd: --baseDn dc=example,dc=com \
+   #tbd: --addBaseEntry \
+   #tbd: --productionMode \
 
    # DS -- it is possible to use a single DS to support AM Identity Data, AM Configuration Data, AM CTS and even Policy data.
    # it supports multiple profiles per "setup" command if we want to.
@@ -216,8 +228,8 @@ Vagrant.configure(2) do |config|
    # https://backstage.forgerock.com/docs/am/6.5/install-guide/#prepare-ext-stores
 
    # Amster
-   mkdir /opt/amster_6.5.1
-   unzip -q /vagrant/Amster-6.5.1.zip -d /opt/amster_6.5.1
+   mkdir /opt/amster_6.5.2
+   unzip -q /vagrant/Amster-6.5.2.zip -d /opt/amster_6.5.2
    export JAVA_HOME=/usr/lib/jvm/java
 
    #
@@ -235,7 +247,7 @@ Vagrant.configure(2) do |config|
    #
 
    # using amster examples
-   # /opt/amster_6.5.1/amster -Djavax.net.ssl.trustStore=/opt/openidm/security/truststore /opt/amster_6.5.1/samples/export-bcm.amster
+   # /opt/amster_6.5.2/amster -Djavax.net.ssl.trustStore=/opt/openidm/security/truststore /opt/amster_6.5.2/samples/export-bcm.amster
    #
    # example export-bcm-script contained:
    # connect -i https://proxy.172.16.12.10.xip.io/openam 
@@ -248,7 +260,6 @@ Vagrant.configure(2) do |config|
    # adding transport key if needed
    # keytool -genseckey -alias "sms.transport.key" -keyalg AES -keysize 128 -storetype jceks -keystore /opt/am-config/openam/keystore.jceks -storepass:file /opt/am-config/openam/.storepass -keypass:file /opt/am-config/openam/.keypass
 
-
    # AM
    # edit /opt/wildfly/bin/standalone.conf:
    #JAVA_OPTS="-Xms1024m -Xmx1024m -XX:MetaspaceSize=256M -XX:MaxMetaspaceSize=256m -Djava.net.preferIPv4Stack=true"
@@ -260,7 +271,6 @@ Vagrant.configure(2) do |config|
    # JAVA_OPTS="$JAVA_OPTS -Djavax.net.ssl.trustStore=/opt/openidm/security/truststore"
    # JAVA_OPTS="$JAVA_OPTS -Djavax.net.ssl.trustStorePassword=changeit"
 
-
    # inside the war, edit the file: WEB-INF/classes/bootstrap.properties
    # uncomment the config.dir property, and set as follows:
    # configuration.dir=/opt/am-config
@@ -270,31 +280,26 @@ Vagrant.configure(2) do |config|
    chown wildfly: /opt/am-config
 
    # extract am, modify war for use with Wildfly
-   unzip -q /vagrant/AM-eval-6.5.1.zip -d /opt
+   unzip -q /vagrant/AM-eval-6.5.2.zip -d /opt
    mkdir /tmp/am-boot; pushd /tmp/am-boot
-   jar xf /opt/openam/AM-eval-6.5.1.war WEB-INF/classes/bootstrap.properties
-   sed -i 's/# configuration.dir=$/configuration.dir=\/opt\/am-config/' WEB-INF/classes/bootstrap.properties 
-   jar uf /opt/openam/AM-eval-6.5.1.war WEB-INF/classes/bootstrap.properties
+   jar xf /opt/openam/AM-eval-6.5.2.war WEB-INF/classes/bootstrap.properties
+   sed -i 's/# configuration.dir=$/configuration.dir=\\/opt\\/am-config/' WEB-INF/classes/bootstrap.properties 
+   jar uf /opt/openam/AM-eval-6.5.2.war WEB-INF/classes/bootstrap.properties
    popd
 
    # deploy war (we'll stop jboss to be safe)
    systemctl stop wildfly
-   cp /opt/openam/AM-eval-6.5.1.war /opt/wildfly/standalone/deployments/openam.war
+   cp /opt/openam/AM-eval-6.5.2.war /opt/wildfly/standalone/deployments/openam.war
    chown wildfly: /opt/wildfly/standalone/deployments/openam.war
-   systemctl start wildfly
+   systemctl start wildfly && sleep 5
 
    # enable AJP, set scheme to https so redirects work correctly
    /opt/wildfly/bin/jboss-cli.sh --connect --commands="/subsystem=undertow/server=default-server/ajp-listener=ajpListener:add(socket-binding=ajp, scheme=https, enabled=true)"
 
    # for EAP / AS we would remove WEB-INF/jboss-all.xml
 
-   # IDM
-   groupadd -r openidm
-   useradd -r -g openidm -d /opt/openidm -s /sbin/nologin openidm
-   unzip -q /vagrant/IDM-eval-6.5.0.1.zip -d /opt
-   chown -RH openidm: /opt/openidm
-
-   keytool -importcert -file /vagrant/certs/certgen/ca.crt -keystore /opt/openidm/security/truststore -alias bcm-devel-ca -trustcacerts
+   # IDM Configure
+   keytool -importcert -file /vagrant/certs/ca.crt -storepass changeit -keystore /opt/openidm/security/truststore -alias bcm-devel-ca -trustcacerts -noprompt
 
    sed -i 's/openidm.port.http=8080/openidm.port.http=7070/' /opt/openidm/resolver/boot.properties
    sed -i 's/openidm.port.https=8443/openidm.port.https=7443/' /opt/openidm/resolver/boot.properties
@@ -303,11 +308,11 @@ Vagrant.configure(2) do |config|
    sed -i 's/openidm.host=localhost/openidm.host=proxy.172.16.12.10.xip.io/' /opt/openidm/resolver/boot.properties
 
    # change paths because behind proxy
-   sed -i 's/"urlContextRoot" : "\//"urlContextRoot" : "\/idm\//' /opt/openidm/conf/ui.context-admin.json
-   sed -i 's/"urlContextRoot" : "\//"urlContextRoot" : "\/idm\//' /opt/openidm/conf/ui.context-api.json
-   sed -i 's/"urlContextRoot" : "\//"urlContextRoot" : "\/idm\//' /opt/openidm/conf/ui.context-oauth.json
+   sed -i 's/"urlContextRoot" : "\\//"urlContextRoot" : "\\/idm\\//' /opt/openidm/conf/ui.context-admin.json
+   sed -i 's/"urlContextRoot" : "\\//"urlContextRoot" : "\\/idm\\//' /opt/openidm/conf/ui.context-api.json
+   sed -i 's/"urlContextRoot" : "\\//"urlContextRoot" : "\\/idm\\//' /opt/openidm/conf/ui.context-oauth.json
    # this one is base path
-   sed -i 's/"urlContextRoot" : "\//"urlContextRoot" : "\/idm/' /opt/openidm/conf/ui.context-enduser.json
+   sed -i 's/"urlContextRoot" : "\\//"urlContextRoot" : "\\/idm/' /opt/openidm/conf/ui.context-enduser.json
 
    # TODO: see how to run as a service
    # for now, following full stack samples
