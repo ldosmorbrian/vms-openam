@@ -123,6 +123,7 @@ Vagrant.configure(2) do |config|
     systemctl restart httpd.service
     # java
     yum install java-1.8.0-openjdk-devel -y
+    export JAVA_HOME=/usr/lib/jvm/java
     # wildfly
     tar xzf /vagrant/wildfly-11.0.0.Final.tar.gz -C /opt
     ln -s /opt/wildfly-11.0.0.Final /opt/wildfly
@@ -230,7 +231,6 @@ Vagrant.configure(2) do |config|
    # Amster
    mkdir /opt/amster_6.5.2
    unzip -q /vagrant/Amster-6.5.2.zip -d /opt/amster_6.5.2
-   export JAVA_HOME=/usr/lib/jvm/java
 
    #
    # we will still probably need ssoadm because amster does not support offline configuration
@@ -291,12 +291,24 @@ Vagrant.configure(2) do |config|
    systemctl stop wildfly
    cp /opt/openam/AM-eval-6.5.2.war /opt/wildfly/standalone/deployments/openam.war
    chown wildfly: /opt/wildfly/standalone/deployments/openam.war
+   # for EAP / AS we would remove WEB-INF/jboss-all.xml
    systemctl start wildfly && sleep 5
 
    # enable AJP, set scheme to https so redirects work correctly
    /opt/wildfly/bin/jboss-cli.sh --connect --commands="/subsystem=undertow/server=default-server/ajp-listener=ajpListener:add(socket-binding=ajp, scheme=https, enabled=true)"
 
-   # for EAP / AS we would remove WEB-INF/jboss-all.xml
+   # Use Amster to load the base configuration of AM (minus our custom Realms)
+
+   # Use Amster to load our custom Realms
+
+
+   # SSOAdminTools
+   mkdir /opt/ssoadmintools
+   mkdir -p /var/log/ssoadm/debug
+   mkdir -p /var/log/ssoadm/logs
+   unzip -q /opt/openam/AM-SSOAdminTools-5.1.2.5.zip -d /opt/ssoadmintools
+   # this requires AM to be configured already
+   /opt/openam/ssoadmintools/setup --path /opt/am-config --debug /var/log/ssoadm/debug --log /var/log/ssoadm/log --acceptLicense
 
    # IDM Configure
    keytool -importcert -file /vagrant/certs/ca.crt -storepass changeit -keystore /opt/openidm/security/truststore -alias bcm-devel-ca -trustcacerts -noprompt
