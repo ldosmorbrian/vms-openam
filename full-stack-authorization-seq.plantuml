@@ -1,0 +1,27 @@
+@startuml
+title Full Stack Authorization Code Flow
+
+participant "Relying Party\n(IDM)"
+participant "End User"
+box "OpenID Provider\n(ForgeRock Access Management - AM)"
+participant "Authorization Endpoint"
+participant "Token Endpoint"
+participant "User Info Endpoint"
+end box
+participant "Data Store\n(DS)"
+
+"Relying Party\n(IDM)" <-- "End User": Access IDM UI Context URL
+"Relying Party\n(IDM)" --> "Authorization Endpoint": Redirect to the AM AuthZ Endpoint
+
+"Authorization Endpoint" --> "Authorization Endpoint": Prepare Authentication Request
+"Authorization Endpoint" --> "Data Store\n(DS)": Authentication Request
+"Authorization Endpoint" <-- "Data Store\n(DS)": Authentication Confirmation
+"Authorization Endpoint" --> "End User": Consent/authorization
+
+"End User" --> "Relying Party\n(IDM)": Authorization Code
+"Relying Party\n(IDM)" --> "Token Endpoint": Authorization Code
+"Relying Party\n(IDM)" <-- "Token Endpoint": ID Token
+"Relying Party\n(IDM)" --> "Relying Party\n(IDM)": Validate ID Token and get End User subject ID
+
+footer Reference: [[https://backstage.forgerock.com/docs/idm/6.5/samples-guide/#figure-full-stack-authz]]
+@enduml

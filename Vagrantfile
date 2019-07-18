@@ -313,6 +313,20 @@ Vagrant.configure(2) do |config|
    # IDM Configure
    keytool -importcert -file /vagrant/certs/ca.crt -storepass changeit -keystore /opt/openidm/security/truststore -alias bcm-devel-ca -trustcacerts -noprompt
 
+   # for cert pem files with many tbd trusts, this is easier:
+
+   #First, convert your certificate in a DER format :
+   #openssl x509 -outform der -in certificate.pem -out certificate.der
+
+   # And after, import it in the keystore :
+   #keytool -import -alias your-alias -keystore cacerts -file certificate.der
+
+   # splitting pem with many certs
+   # csplit --digits=3 --quiet --prefix=onepem ../cacert.pem '/-----BEGIN CERTIFICATE-----/' '{*}'
+   # for i in $(ls onepem*); do CN=$(openssl x509 -in $i -text |grep Subject: |awk -F, '{ print $5 }' | awk -F= '{ print $2 }'); keytool -import -alias "$CN" -keystore /opt/openidm/security/truststore -storepass changeit -trustcacerts -noprompt -file $i; done
+
+
+
    sed -i 's/openidm.port.http=8080/openidm.port.http=7070/' /opt/openidm/resolver/boot.properties
    sed -i 's/openidm.port.https=8443/openidm.port.https=7443/' /opt/openidm/resolver/boot.properties
    sed -i 's/openidm.port.mutualauth=8444/openidm.port.mutualauth=7444/' /opt/openidm/resolver/boot.properties
@@ -320,11 +334,11 @@ Vagrant.configure(2) do |config|
    sed -i 's/openidm.host=localhost/openidm.host=proxy.172.16.12.10.xip.io/' /opt/openidm/resolver/boot.properties
 
    # change paths because behind proxy
-   sed -i 's/"urlContextRoot" : "\\//"urlContextRoot" : "\\/idm\\//' /opt/openidm/conf/ui.context-admin.json
-   sed -i 's/"urlContextRoot" : "\\//"urlContextRoot" : "\\/idm\\//' /opt/openidm/conf/ui.context-api.json
-   sed -i 's/"urlContextRoot" : "\\//"urlContextRoot" : "\\/idm\\//' /opt/openidm/conf/ui.context-oauth.json
+   sed -i 's/"urlContextRoot" : "\\//"urlContextRoot" : "\\/idm\\//' /opt/openidm/samples/full-stack/conf/ui.context-admin.json
+   sed -i 's/"urlContextRoot" : "\\//"urlContextRoot" : "\\/idm\\//' /opt/openidm/samples/full-stack/conf/ui.context-api.json
+   sed -i 's/"urlContextRoot" : "\\//"urlContextRoot" : "\\/idm\\//' /opt/openidm/samples/full-stack/conf/ui.context-oauth.json
    # this one is base path
-   sed -i 's/"urlContextRoot" : "\\//"urlContextRoot" : "\\/idm/' /opt/openidm/conf/ui.context-enduser.json
+   sed -i 's/"urlContextRoot" : "\\//"urlContextRoot" : "\\/idm/' /opt/openidm/samples/full-stack/conf/ui.context-enduser.json
 
    # TODO: see how to run as a service
    # for now, following full stack samples
