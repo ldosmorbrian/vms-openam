@@ -1,0 +1,27 @@
+@startuml
+title JWT Bearer Profile for Authorization Grant
+autonumber
+participant "Resource Owner\nUser-Agent"
+box "Client can be Issuer"
+participant "Client"
+participant "Issuer"
+end box
+participant "Authorization Server"
+participant "Resource Server"
+
+"Resource Owner\nUser-Agent" <-- "Client": Redirect
+"Resource Owner\nUser-Agent" --> "Issuer": ...for authentication.
+"Resource Owner\nUser-Agent" <-- "Issuer": If credentials are valid, redirect...
+"Resource Owner\nUser-Agent" --> "Client": ...with signed bearer JWT to\nClient
+
+"Client" --> "Authorization Server": Request access token\nwith JWT
+"Authorization Server" --> "Authorization Server": Validate JWT
+"Client" <-- "Authorization Server": Response with access token
+
+"Client" --> "Resource Server": Request resource with access token
+"Authorization Server" <-- "Resource Server": Request token validation and information
+"Authorization Server" --> "Resource Server": If access token is valid, respond with information
+"Client" <-- "Resource Server": If access token is valid, return protected resource
+
+footer Reference: [[https://backstage.forgerock.com/docs/am/6.5/oauth2-guide/#oauth2-jwt-bearer]]
+@enduml
