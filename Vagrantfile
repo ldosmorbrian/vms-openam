@@ -108,7 +108,7 @@ Vagrant.configure(2) do |config|
     sed -i 's/\\/etc\\/pki\\/tls\\/certs\\/localhost.crt/\\/etc\\/pki\\/tls\\/certs\\/proxy.172.16.12.10.xip.io.crt/' /etc/httpd/conf.d/ssl.conf
     sed -i 's/\\/etc\\/pki\\/tls\\/private\\/localhost.key/\\/etc\\/pki\\/tls\\/private\\/proxy.172.16.12.10.xip.io.key/' /etc/httpd/conf.d/ssl.conf
     sed -i 's/#SSLCACertificateFile/SSLCACertificateFile/' /etc/httpd/conf.d/ssl.conf
-    sed -i 's/#SSLVerifyClient/SSLVerifyClient/' /etc/httpd/conf.d/ssl.conf
+    sed -i 's/#SSLVerifyClient require/SSLVerifyClient optional/' /etc/httpd/conf.d/ssl.conf
     sed -i 's/#SSLVerifyDepth/SSLVerifyDepth/' /etc/httpd/conf.d/ssl.conf
     echo '#' >> /etc/httpd/conf/httpd.conf
     echo 'ProxyPass /openam               ajp://localhost:8009/openam' >> /etc/httpd/conf/httpd.conf
@@ -261,15 +261,15 @@ Vagrant.configure(2) do |config|
    # keytool -genseckey -alias "sms.transport.key" -keyalg AES -keysize 128 -storetype jceks -keystore /opt/am-config/openam/keystore.jceks -storepass:file /opt/am-config/openam/.storepass -keypass:file /opt/am-config/openam/.keypass
 
    # AM
-   # edit /opt/wildfly/bin/standalone.conf:
-   #JAVA_OPTS="-Xms1024m -Xmx1024m -XX:MetaspaceSize=256M -XX:MaxMetaspaceSize=256m -Djava.net.preferIPv4Stack=true"
-   #JAVA_OPTS="$JAVA_OPTS -Djboss.modules.system.pkgs=$JBOSS_MODULES_SYSTEM_PKGS -Djava.awt.headless=true"
-   #JAVA_OPTS="$JAVA_OPTS -Dorg.apache.tomcat.util.http.ServerCookie.ALWAYS_ADD_EXPIRES=true"
-   #JAVA_OPTS="$JAVA_OPTS -Dorg.forgerock.openam.ldap.secure.protocol.version=TLSv1.2"
-   #
-   # possibly required for IDM integration
-   # JAVA_OPTS="$JAVA_OPTS -Djavax.net.ssl.trustStore=/opt/openidm/security/truststore"
-   # JAVA_OPTS="$JAVA_OPTS -Djavax.net.ssl.trustStorePassword=changeit"
+   # edit /opt/wildfly/bin/standalone.conf with JAVA_OPTS configuration:
+   sed -i '/JAVA_OPTS=\"/d' /opt/wildfly/bin/standalone.conf
+   # the next few lines are inserting lines in the file, like pushing onto a stack, so they appear reversed in the file (last in is top of stack)
+   sed -i '/x\$JAVA_OPTS/a JAVA_OPTS="$JAVA_OPTS -Djavax.net.ssl.trustStorePassword=changeit"' /opt/wildfly/bin/standalone.conf
+   sed -i '/x\$JAVA_OPTS/a JAVA_OPTS="$JAVA_OPTS -Djavax.net.ssl.trustStore=/opt/wildfly/truststore"' /opt/wildfly/bin/standalone.conf
+   sed -i '/x\$JAVA_OPTS/a JAVA_OPTS="$JAVA_OPTS -Dorg.forgerock.openam.ldap.secure.protocol.version=TLSv1.2"' /opt/wildfly/bin/standalone.conf
+   sed -i '/x\$JAVA_OPTS/a JAVA_OPTS="$JAVA_OPTS -Dorg.apache.tomcat.util.http.ServerCookie.ALWAYS_ADD_EXPIRES=true"' /opt/wildfly/bin/standalone.conf
+   sed -i '/x\$JAVA_OPTS/a JAVA_OPTS="$JAVA_OPTS -Djboss.modules.system.pkgs=$JBOSS_MODULES_SYSTEM_PKGS -Djava.awt.headless=true"' /opt/wildfly/bin/standalone.conf
+   sed -i '/x\$JAVA_OPTS/a JAVA_OPTS="-Xms1024m -Xmx1024m -XX:MetaspaceSize=256M -XX:MaxMetaspaceSize=256m -Djava.net.preferIPv4Stack=true"' /opt/wildfly/bin/standalone.conf
 
    # inside the war, edit the file: WEB-INF/classes/bootstrap.properties
    # uncomment the config.dir property, and set as follows:
@@ -289,10 +289,14 @@ Vagrant.configure(2) do |config|
 
    # deploy war (we'll stop jboss to be safe)
    systemctl stop wildfly
+   keytool -importcert -file /vagrant/certs/ca.crt -storepass changeit -keystore /opt/wildfly/truststore -alias bcm-devel-ca -trustcacerts -noprompt
+   chown wildfly: /opt/wildfly/truststore
+   chmod 600 /opt/wildfly/truststore
    cp /opt/openam/AM-eval-6.5.2.war /opt/wildfly/standalone/deployments/openam.war
    chown wildfly: /opt/wildfly/standalone/deployments/openam.war
    # for EAP / AS we would remove WEB-INF/jboss-all.xml
-   systemctl start wildfly && sleep 5
+   systemctl start wildfly
+   sleep 20
 
    # enable AJP, set scheme to https so redirects work correctly
    /opt/wildfly/bin/jboss-cli.sh --connect --commands="/subsystem=undertow/server=default-server/ajp-listener=ajpListener:add(socket-binding=ajp, scheme=https, enabled=true)"
@@ -307,8 +311,15 @@ Vagrant.configure(2) do |config|
    mkdir -p /var/log/ssoadm/debug
    mkdir -p /var/log/ssoadm/logs
    unzip -q /opt/openam/AM-SSOAdminTools-5.1.2.5.zip -d /opt/ssoadmintools
+
    # this requires AM to be configured already
-   /opt/openam/ssoadmintools/setup --path /opt/am-config --debug /var/log/ssoadm/debug --log /var/log/ssoadm/log --acceptLicense
+   # /opt/ssoadmintools/setup --path /opt/am-config --debug /var/log/ssoadm/debug --log /var/log/ssoadm/log --acceptLicense
+
+   # AM is running but not yet configured (so /opt/am-config is empty)
+   # we can't run the following commands until it is configured
+   # if we just load the entire config with amster, we might not need to create another realm anyway
+   #/opt/ssoadm/openam/bin/ssoadm create-realm -e /bcm -u amadmin -f /tmp/dspasswd
+   #/opt/ssoadm/openam/bin/ssoadm delete-datastores -e /bcm -u amadmin -f /tmp/dspasswd -m embedded
 
    # IDM Configure
    keytool -importcert -file /vagrant/certs/ca.crt -storepass changeit -keystore /opt/openidm/security/truststore -alias bcm-devel-ca -trustcacerts -noprompt
@@ -325,21 +336,33 @@ Vagrant.configure(2) do |config|
    # csplit --digits=3 --quiet --prefix=onepem ../cacert.pem '/-----BEGIN CERTIFICATE-----/' '{*}'
    # for i in $(ls onepem*); do CN=$(openssl x509 -in $i -text |grep Subject: |awk -F, '{ print $5 }' | awk -F= '{ print $2 }'); keytool -import -alias "$CN" -keystore /opt/openidm/security/truststore -storepass changeit -trustcacerts -noprompt -file $i; done
 
-
-
    sed -i 's/openidm.port.http=8080/openidm.port.http=7070/' /opt/openidm/resolver/boot.properties
    sed -i 's/openidm.port.https=8443/openidm.port.https=7443/' /opt/openidm/resolver/boot.properties
    sed -i 's/openidm.port.mutualauth=8444/openidm.port.mutualauth=7444/' /opt/openidm/resolver/boot.properties
    sed -i 's/openidm.auth.clientauthonlyports=8444/openidm.auth.clientauthonlyports=7444/' /opt/openidm/resolver/boot.properties
    sed -i 's/openidm.host=localhost/openidm.host=proxy.172.16.12.10.xip.io/' /opt/openidm/resolver/boot.properties
 
-   # change paths because behind proxy
-   sed -i 's/"urlContextRoot" : "\\//"urlContextRoot" : "\\/idm\\//' /opt/openidm/samples/full-stack/conf/ui.context-admin.json
-   sed -i 's/"urlContextRoot" : "\\//"urlContextRoot" : "\\/idm\\//' /opt/openidm/samples/full-stack/conf/ui.context-api.json
-   sed -i 's/"urlContextRoot" : "\\//"urlContextRoot" : "\\/idm\\//' /opt/openidm/samples/full-stack/conf/ui.context-oauth.json
-   # this one is base path
-   sed -i 's/"urlContextRoot" : "\\//"urlContextRoot" : "\\/idm/' /opt/openidm/samples/full-stack/conf/ui.context-enduser.json
+   # move the full-stack configuration bundle from samples to the default location
+   mv /opt/openidm/conf /opt/openidm/conf.orig
+   cp -Rp /opt/openidm/samples/full-stack/conf /opt/openidm/conf
 
+   # change paths because behind proxy
+   sed -i 's/"urlContextRoot" : "\\//"urlContextRoot" : "\\/idm\\//' /opt/openidm/conf/ui.context-admin.json
+   sed -i 's/"urlContextRoot" : "\\//"urlContextRoot" : "\\/idm\\//' /opt/openidm/conf/ui.context-api.json
+   sed -i 's/"urlContextRoot" : "\\//"urlContextRoot" : "\\/idm\\//' /opt/openidm/conf/ui.context-oauth.json
+   # this one is base path
+   sed -i 's/"urlContextRoot" : "\\//"urlContextRoot" : "\\/idm/' /opt/openidm/conf/ui.context-enduser.json
+
+   # since behind proxy, need to disable the CORs related stuff in Jetty (since our proxy already handles)
+   sed -i '/hijacking/,+10d' /opt/openidm/conf/jetty.xml
+   tac /opt/openidm/conf/jetty.xml | sed '/ForwardedRequestCustomizer/,+2d' | tac > /tmp/jetty.tmp
+   mv -f /tmp/jetty.tmp /opt/openidm/conf/jetty.xml
+   chown openidm: /opt/openicm/conf/jetty.xml
+
+   /opt/openidm/bin/create-openidm-rc.sh --systemd > /etc/systemd/system/openidm.service
+   sed -i 's/User=root/User=openidm/' /etc/systemd/system/openidm.service
+   systemctl enable openidm
+   systemctl start openidm
    # TODO: see how to run as a service
    # for now, following full stack samples
    # run like this:

@@ -19,56 +19,16 @@ Start vm
 
         vagrant up --provider virtualbox
 
-These application bundles are expected in this base dir:
-
-        AM-eval-6.5.1.zip # download from ForgeRock backstage
-        web-agent-5.6.0-Apache_v24_Linux_64bit.zip  # download from ForgeRock backstage
-        wildfly-11.0.0.Final.tar.gz # download from wildfly.org (supposedly this is closest match to EAP 7.1)
 
 
-## HTTPD Notes
-
-yum install mod_ssl
-copy certs to some directory, for example here's one potential file configuration (from /etc/httpd/conf/ssl.conf):
-SSLEngine on
-SSLCertificateFile /etc/pki/tls/certs/proxy.172.16.12.10.xip.io.crt
-SSLCertificateKeyFile /etc/pki/tls/private/proxy.172.16.12.10.xip.io.key
-SSLVerifyClient require
-SSLCACertificateFile /etc/pki/tls/certs/ca-bundle.trust.crt
-SSLVerifyDepth 0
-
-Needed to define ServerName globally
-TODO: update certgen tool to include pkcs12 version of certs, example:
-openssl pkcs12 -in MORIARTY.BRIAN.C.crt -inkey MORIARTY.BRIAN.C.key -export -out MORIARTY.BRIAN.C.pkcs12
-
-yum install mod_proxy_html
-## Wildfly
-
-Enbable AJP:
-[root@localhost wildfly]# bin/jboss-cli.sh 
-You are disconnected at the moment. Type 'connect' to connect to the server or 'help' for the list of supported commands.
-[disconnected /] connect
-[standalone@localhost:9990 /] /subsystem=undertow/server=default-server/ajp-listener=myListener:add(socket-binding=ajp, scheme=http, enabled=true)
-{"outcome" => "success"}
-[standalone@localhost:9990 /] exit
-[
-
-## DS Notes
-
-sysctl --write fs.inotify.max_user_watches=524288
-
-
-## IDM Notes
-
-
-
+---------------------------------
 
 Installing OpenAM with GUI
 
 The vagrant init scripts will configure tomcat and deploy the OpenAM war.
 
-For this test scenario, stop the firewall first and then connect to [https://proxy.172.16.12.10.xip.io/openam]()
-
+Connect to [https://proxy.172.16.12.10.xip.io/openam]()
+password
 ###Step 1: General
 
 Enter password for admin user, example: Password1234
@@ -81,7 +41,7 @@ Enter password for admin user, example: Password1234
 
 * Platform Locale: en_US
 
-* Configuration Directory: /opt/openamcfg
+* Configuration Directory: /opt/am-config
 
 ###Step 3: Configuration Data Store Settings
 
@@ -121,23 +81,160 @@ Port: 1389
 
 * Yes (just say yes, it's behind httpd)
 
-* Site Name: sandbox
+* Site Name: proxy
 
 * Load Balancer URL: https://proxy.172.16.12.10.xip.io/openam
 
+###Step 6: Click Create Configuration
 
-###Step 6: Default Policy Agent User
+Sometimes the GUI doesn't finally say success, so if it seems to be hanging at Setting up monitoring processs,
+it's probably actually done so just go to the AM URL and login.
 
-Enter password, example: adminpa1235813
-
-###Configurator Summary Details
-
-Should look like what was done so far, expect it to complete and click proceed to login.
 
 ###Sign in
 
-Example: amAdmin / admin1235813
+Example: amadmin / Password12345
 
+
+###Step 7: Click New Realm
+
+* Name: marvel
+
+Click Create
+
+###Step 9: Configure Identity Store
+
+* Click Identity Stores on left side panel
+
+* Click "OpenDJ"
+
+* Change "LDAP Organization DN" value to "dc=example,dc=com"
+
+* Save Changes
+
+* Click on "Identities" on left side panel
+
+* Expect to see a couple users in there (jdoe and bjensen from the Example.ldif)
+
+
+## Prepare AM with OIDC/OAuth2 for IDM
+
+Reference: https://forum.forgerock.com/2018/05/forgerock-identity-platform-version-6-integrating-idm-ds/
+
+We modified information from the reference guide to reflect being behind TLS proxy and using sub-realm.
+
+###Step 1: Set up AM as an OIDC authorization server.
+
+* Select Marvel Realm -> Configure OAuth Provider -> Configure OpenID Connect -> Create -> OK. 
+
+### Step 2: Set up IDM as an OAuth 2.0 Client
+
+* Select Applications -> OAuth 2.0. Choose Add Client. 
+    
+    In the New OAuth 2.0 Client window that appears, set openidm as a Client ID, set changeme as a Client Secret, 
+    along with a Redirection URI of https://proxy.172.16.12.10.xip.io/idm/oauthReturn/.
+    Also may need second Redirection URI of https://proxy.172.16.12.10.xip.io/idm/admin/oauthReturn/
+    The scope is openid, which reflects the use of the OpenID Connect standard.
+    
+* Select Create, go to the Advanced Tab, scroll down. Activate the Implied Consent option.
+
+* Save Changes
+
+### Step 3: Go to the OpenID Connect tab
+
+Enter the following information in the Post Logout Redirect URIs text box:
+
+* https://proxy.172.16.12.10.xip.io/idm
+
+* https://proxy.172.16.12.10.xip.io/idm/admin/
+
+Save changes
+
+###Step 3b: Go to Signing and Encryption tab
+
+* Json Web Key URI: https://proxy.172.16.12.10.xip.io:443/openam/oauth2/marvel/connect/jwk_uri
+
+### Step 4: Select Services -> OAuth2 Provider -> Advanced OpenID Connect:
+
+* Scroll down and enter openidm in the "Authorized OIDC SSO Clients" text box.
+
+Save Changes
+
+### Step 5: Navigate to the Consent tab:
+
+* Enable the Allow Clients to Skip Consent option.
+
+Save Changes.
+
+
+## Configure IDM to use AM for authentication.
+
+Reference: https://forum.forgerock.com/2018/05/forgerock-identity-platform-version-6-integrating-idm-ds/
+
+###Step 1:  Log in to IDM https://proxy.172.16.12.10.xip.io/idm/admin
+
+* openidm-admin / openidm-admin
+
+###Step 2: Configure Connector Password
+
+The 'full-stack' configuration comes prepared to connect to OpenDJ LDap, 
+but the default credentials don't match our configuration.
+
+* Select Configure -> Ldap
+
+* Click the LDAP box to open the config
+
+* Set the password to our default configuration (Password12345)
+
+###Step 3: Reconcile users from the common DS user store to IDM
+
+* Select Configure -> Mappings
+
+In the page that appears, find the mapping from System/Ldap/Account to Managed/User, and press Reconcile. 
+That will populate the IDM Managed User store with users from the common DS user store.
+
+### Step 4: Assign IDM Admin to a user
+
+* Click Manage users (brings up a list of the two sample users)
+
+* Choose 'bjensen' -> Authorization Roles -> Add Authorization Roles -> 'openidm-admin' -> choose
+
+That means bjensen can perform admin activities in IDM.
+
+###Step 4: Configure IDM Authentication
+
+* Select Configure -> Authentication
+
+Choose the ForgeRock Identity Provider option. 
+In the window that appears, scroll down to the configuration details. 
+Based on the instance of AM configured earlier, you’d change:
+
+* Redirection URIs: https://proxy.172.16.12.10.xip.io/idm/oauthReturn/
+
+* Well-Known Endpoint: https://proxy.172.16.12.10.xip.io/openam/oauth2/marvel/.well-known/openid-configuration
+
+* Client ID: openidm
+
+* Client Secret: changeme
+
+Click submit.
+
+* If submit button is disabled, check the Well-Known Endpoint URL, and also verify the IDM
+truststore includes the CA signer for the proxy certificate.
+
+###Step 5: Click to logout and re-authenticate.
+
+The Info message appears after configuring authentication, click the 'Click Here'
+and re-login as bjensen.
+
+
+
+
+
+
+
+
+-------------------------------------
 ###Next Steps
 
 Click Top Level Realm
