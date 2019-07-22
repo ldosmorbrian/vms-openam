@@ -48,7 +48,7 @@ Vagrant.configure(2) do |config|
     # vb.gui = true
   
     # Customize the amount of memory on the VM:
-    vb.memory = "7192"
+    vb.memory = "5192"
   end
   #
   # View the documentation for the provider you are using for more
@@ -138,12 +138,13 @@ Vagrant.configure(2) do |config|
     systemctl daemon-reload
     systemctl enable wildfly
     systemctl start wildfly
+    sleep 10
+
+    # enable AJP, set scheme to https so redirects work correctly
+    /opt/wildfly/bin/jboss-cli.sh --connect --commands="/subsystem=undertow/server=default-server/ajp-listener=ajpListener:add(socket-binding=ajp, scheme=https, enabled=true)"
 
     # OpenDJ
     sysctl --write fs.inotify.max_user_watches=524288 # TODO: verify this from docs
-    groupadd -r opendj
-    useradd -r -g opendj -d /opt/opendj -s /sbin/nologin opendj
-
     echo "Password12345" > /tmp/dspasswd
 
     # DS for AM Configuration Data
@@ -162,6 +163,8 @@ Vagrant.configure(2) do |config|
 #     --acceptLicense
 
   # DS Extract
+  groupadd -r opendj
+  useradd -r -g opendj -d /opt/opendj -s /sbin/nologin opendj
   unzip -q /vagrant/DS-eval-6.5.2.zip -d /opt
   chown -R opendj: /opt/opendj
 
@@ -201,13 +204,25 @@ Vagrant.configure(2) do |config|
 
 
    # stop DS (required because import happens offline)
-   /opt/opendj/bin/stop-ds
+   sudo -uopendj bash -C /opt/opendj/bin/stop-ds
 
    # ofline: load the base ldif (example, need to provide actual ldif, this will fail until then)
-   /opt/opendj/bin/import-ldif -b dc=example,dc=com -n amIdentityStore -l /opt/openidm/samples/full-stack/data/Example.ldif --offline
+   cp /opt/openidm/samples/full-stack/data/Example.ldif /tmp && chown opendj /tmp/Example.ldif
+   sudo -uopendj bash -C /opt/opendj/bin/import-ldif -b dc=example,dc=com -n amIdentityStore -l /tmp/Example.ldif --offline
 
-   # start DS
-   /opt/opendj/bin/start-ds
+   # cheat by using the openidm service template
+   /opt/opendj/bin/create-rc-script --userName root --outputFile /etc/init.d/opendj
+   #sed -i 's/\\/bin\\/su opendj -c/sudo -uopendj bash -C/' /etc/init.d/opendj
+   #sed -i '/sudo/s/\\"//g' /etc/init.d/opendj
+
+   # enable and start DS
+   systemctl enable opendj
+   systemctl start opendj
+
+   #rm -f /opt/opendj/logs/*  # remove logs from before we configured as service 
+ 
+   # the rc service hangs at start up, so for now we just start up manually
+   # sudo -uopendj bash -C /opt/opendj/bin/start-ds
 
    # example search
    # /opt/opendj/bin/ldapsearch --port 1389 --baseDN dc=example,dc=com "ou=People"
@@ -296,11 +311,6 @@ Vagrant.configure(2) do |config|
    chown wildfly: /opt/wildfly/standalone/deployments/openam.war
    # for EAP / AS we would remove WEB-INF/jboss-all.xml
    systemctl start wildfly
-   sleep 20
-
-   # enable AJP, set scheme to https so redirects work correctly
-   /opt/wildfly/bin/jboss-cli.sh --connect --commands="/subsystem=undertow/server=default-server/ajp-listener=ajpListener:add(socket-binding=ajp, scheme=https, enabled=true)"
-
    # Use Amster to load the base configuration of AM (minus our custom Realms)
 
    # Use Amster to load our custom Realms
@@ -357,7 +367,7 @@ Vagrant.configure(2) do |config|
    sed -i '/hijacking/,+10d' /opt/openidm/conf/jetty.xml
    tac /opt/openidm/conf/jetty.xml | sed '/ForwardedRequestCustomizer/,+2d' | tac > /tmp/jetty.tmp
    mv -f /tmp/jetty.tmp /opt/openidm/conf/jetty.xml
-   chown openidm: /opt/openicm/conf/jetty.xml
+   chown openidm: /opt/openidm/conf/jetty.xml
 
    /opt/openidm/bin/create-openidm-rc.sh --systemd > /etc/systemd/system/openidm.service
    sed -i 's/User=root/User=openidm/' /etc/systemd/system/openidm.service
