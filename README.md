@@ -228,10 +228,36 @@ The Info message appears after configuring authentication, click the 'Click Here
 and re-login as bjensen.
 
 
+------------------------
+Testing Email configuration
+Since there's not a "test" button in the gui, the following can be done at commandline:
+
+curl -vvk -H "Content-Type: application/json" \
+    -H "X-OpenIDM-Username: openidm-admin"    \
+    -H "X-OpenIDM-Password: openidm-admin" -X POST    \
+    -d '{"from":"openidm@smtp.local.io", "to":"user1@smtp.local.io", "subject":"Test Email", "body":"Test body text"}'    \
+    "https://proxy.172.16.12.10.xip.io/openidm/external/email?_action=send"
+
+--------------------------
+Next steps:
+
+IDM Samples Guide:
+C17: Using a Workflow to Provision User Accounts
+
+* basically just approves an account to be mapped from one data source to another.
+
+Need to further understand:
+
+Mappings in general
+Assignments (entitlements)
+CH16: Provisioning with Roles
 
 
+IDM Integrators Guide
 
+CH11: Working with Managed Roles
 
+CH22: Integrating Business Processes and Workflows
 
 
 -------------------------------------
